@@ -94,7 +94,7 @@ src/main/java/com/racing/
 
 | Tên | Vai trò |
 |---|---|
-| Tạ Vũ Hảo (Leader) | Backend Architect & Database Design |
-| Nguyễn Hồng Duy | Backend Developer & Physical Design & Database Design |
+| Tạ Vũ Hảo (Leader) | Backend Architect & DevOps |
+| Nguyễn Hồng Duy | Backend Developer & Database Design |
 
 
