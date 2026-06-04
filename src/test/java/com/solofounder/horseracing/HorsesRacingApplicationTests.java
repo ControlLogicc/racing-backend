@@ -1,4 +1,4 @@
-package com.solofounder.horsesracing;
+package com.solofounder.horseracing;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

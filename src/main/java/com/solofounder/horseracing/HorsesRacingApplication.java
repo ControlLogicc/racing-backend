@@ -1,4 +1,4 @@
-package com.solofounder.horsesracing;
+package com.solofounder.horseracing;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
