@@ -29,7 +29,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
 
     private static final Set<Role> PUBLIC_ROLES = Set.of(Role.HORSE_OWNER, Role.JOCKEY, Role.SPECTATOR);
-    private static final Set<Role> ADMIN_ROLES = Set.of(Role.ADMIN, Role.RACE_REFEREE);
+    private static final Set<Role> ADMIN_ROLES = Set.of(Role.ADMIN, Role.STAFF, Role.RACE_REFEREE);
 
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
@@ -44,6 +44,7 @@ public class AuthService {
                 .fullName(request.getFullName())
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .phone(request.getPhone())
                 .role(request.getRole())
                 .status(UserStatus.ACTIVE)
                 .build();
@@ -56,6 +57,7 @@ public class AuthService {
                 .userId(savedUser.getUserId())
                 .fullName(savedUser.getFullName())
                 .email(savedUser.getEmail())
+                .phone(savedUser.getPhone())
                 .role(savedUser.getRole())
                 .build();
     }
@@ -83,6 +85,7 @@ public class AuthService {
                 .userId(user.getUserId())
                 .fullName(user.getFullName())
                 .email(user.getEmail())
+                .phone(user.getPhone())
                 .role(user.getRole())
                 .build();
     }
@@ -100,6 +103,7 @@ public class AuthService {
                 .fullName(request.getFullName())
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .phone(request.getPhone())
                 .role(request.getRole())
                 .status(UserStatus.ACTIVE)
                 .build();

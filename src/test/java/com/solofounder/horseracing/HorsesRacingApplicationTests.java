@@ -5,6 +5,7 @@ import com.solofounder.horseracing.dto.auth.AuthResponse;
 import com.solofounder.horseracing.dto.auth.LoginRequest;
 import com.solofounder.horseracing.dto.auth.RegisterRequest;
 import com.solofounder.horseracing.dto.user.CreateInternalUserRequest;
+import com.solofounder.horseracing.dto.user.UserResponse;
 import com.solofounder.horseracing.model.User;
 import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.model.enums.UserStatus;
@@ -45,18 +46,17 @@ class HorsesRacingApplicationTests {
     @Autowired
     private JwtService jwtService;
 
-    private static final java.util.Set<Long> preExistingAdminIds = new java.util.HashSet<>();
+    private static final java.util.Set<Long> preExistingUserIds = new java.util.HashSet<>();
 
     @BeforeEach
     void cleanDatabase() {
-        if (preExistingAdminIds.isEmpty()) {
+        if (preExistingUserIds.isEmpty()) {
             userRepository.findAll().stream()
-                    .filter(u -> u.getRole() == Role.ADMIN)
                     .map(User::getUserId)
-                    .forEach(preExistingAdminIds::add);
+                    .forEach(preExistingUserIds::add);
         }
         userRepository.findAll().stream()
-                .filter(u -> !preExistingAdminIds.contains(u.getUserId()))
+                .filter(u -> !preExistingUserIds.contains(u.getUserId()))
                 .forEach(userRepository::delete);
         userRepository.flush();
     }
@@ -75,6 +75,7 @@ class HorsesRacingApplicationTests {
                 .fullName("Owner A")
                 .email("owner@gmail.com")
                 .password("123456")
+                .phone("0900000000")
                 .role(Role.HORSE_OWNER)
                 .build();
 
@@ -98,6 +99,7 @@ class HorsesRacingApplicationTests {
                 .fullName("Owner A")
                 .email("owner@gmail.com")
                 .password("123456")
+                .phone("0900000000")
                 .role(Role.HORSE_OWNER)
                 .build();
 
@@ -110,6 +112,7 @@ class HorsesRacingApplicationTests {
         AuthResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), AuthResponse.class);
         assertNotNull(response.getToken());
         assertEquals("owner@gmail.com", response.getEmail());
+        assertEquals("0900000000", response.getPhone());
         assertEquals(Role.HORSE_OWNER, response.getRole());
     }
 
@@ -120,6 +123,7 @@ class HorsesRacingApplicationTests {
                 .fullName("Jockey A")
                 .email("jockey@gmail.com")
                 .password("123456")
+                .phone("0901111111")
                 .role(Role.JOCKEY)
                 .build();
 
@@ -132,6 +136,7 @@ class HorsesRacingApplicationTests {
         AuthResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), AuthResponse.class);
         assertNotNull(response.getToken());
         assertEquals("jockey@gmail.com", response.getEmail());
+        assertEquals("0901111111", response.getPhone());
         assertEquals(Role.JOCKEY, response.getRole());
     }
 
@@ -142,6 +147,7 @@ class HorsesRacingApplicationTests {
                 .fullName("Spectator A")
                 .email("spectator@gmail.com")
                 .password("123456")
+                .phone("0902222222")
                 .role(Role.SPECTATOR)
                 .build();
 
@@ -154,6 +160,7 @@ class HorsesRacingApplicationTests {
         AuthResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), AuthResponse.class);
         assertNotNull(response.getToken());
         assertEquals("spectator@gmail.com", response.getEmail());
+        assertEquals("0902222222", response.getPhone());
         assertEquals(Role.SPECTATOR, response.getRole());
     }
 
@@ -164,6 +171,7 @@ class HorsesRacingApplicationTests {
                 .fullName("Admin A")
                 .email("admin_new@gmail.com")
                 .password("123456")
+                .phone("0903333333")
                 .role(Role.ADMIN)
                 .build();
 
@@ -180,6 +188,7 @@ class HorsesRacingApplicationTests {
                 .fullName("Referee A")
                 .email("referee_new@gmail.com")
                 .password("123456")
+                .phone("0904444444")
                 .role(Role.RACE_REFEREE)
                 .build();
 
@@ -209,6 +218,7 @@ class HorsesRacingApplicationTests {
         AuthResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), AuthResponse.class);
         assertNotNull(response.getToken());
         assertEquals("owner@gmail.com", response.getEmail());
+        assertEquals("0900000000", response.getPhone());
     }
 
     // 7. Login with wrong password -> Expected: error (400 Bad Request or 401 Unauthorized depend on Security mapping, AuthController returns 400 Bad Request)
@@ -234,6 +244,7 @@ class HorsesRacingApplicationTests {
                 .fullName("Referee A")
                 .email("referee@gmail.com")
                 .password("123456")
+                .phone("0922222222")
                 .role(Role.RACE_REFEREE)
                 .build();
 
@@ -252,6 +263,7 @@ class HorsesRacingApplicationTests {
                 .fullName("Referee A")
                 .email("referee@gmail.com")
                 .password("123456")
+                .phone("0922222222")
                 .role(Role.RACE_REFEREE)
                 .build();
 
@@ -271,6 +283,7 @@ class HorsesRacingApplicationTests {
                 .fullName("Referee A")
                 .email("referee@gmail.com")
                 .password("123456")
+                .phone("0922222222")
                 .role(Role.RACE_REFEREE)
                 .build();
 
@@ -281,9 +294,10 @@ class HorsesRacingApplicationTests {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        User response = objectMapper.readValue(result.getResponse().getContentAsString(), User.class);
+        UserResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), UserResponse.class);
         assertNotNull(response.getUserId());
         assertEquals("referee@gmail.com", response.getEmail());
+        assertEquals("0922222222", response.getPhone());
         assertEquals(Role.RACE_REFEREE, response.getRole());
         assertEquals(UserStatus.ACTIVE, response.getStatus());
     }
@@ -308,6 +322,7 @@ class HorsesRacingApplicationTests {
                 .fullName("Owner B")
                 .email("ownerb@gmail.com")
                 .password("123456")
+                .phone("0900000001")
                 .role(Role.HORSE_OWNER)
                 .build();
 
@@ -316,5 +331,76 @@ class HorsesRacingApplicationTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
+    }
+
+    // 13. Public register STAFF -> Expected: 400 Bad Request
+    @Test
+    void testRegisterStaffPubliclyFails() throws Exception {
+        RegisterRequest req = RegisterRequest.builder()
+                .fullName("Staff A")
+                .email("staff-public@gmail.com")
+                .password("123456")
+                .phone("0911111111")
+                .role(Role.STAFF)
+                .build();
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+    }
+
+    // 14. Admin creates STAFF -> Expected: 200 OK, STAFF user created, password stored as BCrypt hash, status ACTIVE
+    @Test
+    void testAdminCreatesStaffSuccessfully() throws Exception {
+        String adminToken = getAdminToken();
+
+        CreateInternalUserRequest req = CreateInternalUserRequest.builder()
+                .fullName("Staff A")
+                .email("staff@gmail.com")
+                .password("123456")
+                .phone("0911111111")
+                .role(Role.STAFF)
+                .build();
+
+        MvcResult result = mockMvc.perform(post("/api/admin/users")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        UserResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), UserResponse.class);
+        assertNotNull(response.getUserId());
+        assertEquals("staff@gmail.com", response.getEmail());
+        assertEquals("0911111111", response.getPhone());
+        assertEquals(Role.STAFF, response.getRole());
+        assertEquals(UserStatus.ACTIVE, response.getStatus());
+
+        // Verify stored in DB with BCrypt password hash
+        User savedUser = userRepository.findByEmail("staff@gmail.com").orElse(null);
+        assertNotNull(savedUser);
+        assertTrue(passwordEncoder.matches("123456", savedUser.getPasswordHash()));
+        assertNotEquals("123456", savedUser.getPasswordHash());
+    }
+
+    // 15. Non-admin tries to create STAFF -> Expected: 403 Forbidden
+    @Test
+    void testNonAdminCreatesStaffFails() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+
+        CreateInternalUserRequest req = CreateInternalUserRequest.builder()
+                .fullName("Staff A")
+                .email("staff@gmail.com")
+                .password("123456")
+                .phone("0911111111")
+                .role(Role.STAFF)
+                .build();
+
+        mockMvc.perform(post("/api/admin/users")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isForbidden());
     }
 }

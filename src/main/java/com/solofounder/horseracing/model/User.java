@@ -36,11 +36,12 @@ public class User implements UserDetails {
     @JsonIgnore
     private String passwordHash;
 
-    @Enumerated(EnumType.STRING)
+    @Column(name = "phone", length = 20)
+    private String phone;
+
     @Column(name = "role", nullable = false, length = 30)
     private Role role;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     private UserStatus status;
 

@@ -1,6 +1,7 @@
 package com.solofounder.horseracing.controller;
 
 import com.solofounder.horseracing.dto.user.CreateInternalUserRequest;
+import com.solofounder.horseracing.dto.user.UserResponse;
 import com.solofounder.horseracing.model.User;
 import com.solofounder.horseracing.service.AuthService;
 import lombok.RequiredArgsConstructor;
@@ -18,8 +19,16 @@ public class AdminUserController {
     private final AuthService authService;
 
     @PostMapping
-    public ResponseEntity<User> createInternalUser(@RequestBody CreateInternalUserRequest request) {
+    public ResponseEntity<UserResponse> createInternalUser(@RequestBody CreateInternalUserRequest request) {
         User createdUser = authService.adminCreateUser(request);
-        return ResponseEntity.ok(createdUser);
+        UserResponse response = UserResponse.builder()
+                .userId(createdUser.getUserId())
+                .fullName(createdUser.getFullName())
+                .email(createdUser.getEmail())
+                .phone(createdUser.getPhone())
+                .role(createdUser.getRole())
+                .status(createdUser.getStatus())
+                .build();
+        return ResponseEntity.ok(response);
     }
 }
