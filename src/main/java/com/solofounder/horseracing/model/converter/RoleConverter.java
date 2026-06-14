@@ -12,7 +12,7 @@ public class RoleConverter implements AttributeConverter<Role, String> {
         if (role == null) {
             return null;
         }
-        return role.name();
+        return role.name().toLowerCase();
     }
 
     @Override
@@ -20,17 +20,12 @@ public class RoleConverter implements AttributeConverter<Role, String> {
         if (dbData == null) {
             return null;
         }
-        String normalized = dbData.toUpperCase().trim();
-        if (normalized.equals("OWNER")) {
-            return Role.HORSE_OWNER;
+        String trimmed = dbData.trim();
+        for (Role r : Role.values()) {
+            if (r.name().equalsIgnoreCase(trimmed)) {
+                return r;
+            }
         }
-        if (normalized.equals("REFEREE")) {
-            return Role.RACE_REFEREE;
-        }
-        try {
-            return Role.valueOf(normalized);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Unknown role value in database: " + dbData);
-        }
+        throw new IllegalArgumentException("Unknown database value for Role: " + dbData);
     }
 }

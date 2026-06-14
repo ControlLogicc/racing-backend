@@ -12,7 +12,7 @@ public class UserStatusConverter implements AttributeConverter<UserStatus, Strin
         if (status == null) {
             return null;
         }
-        return status.name();
+        return status.name().toLowerCase();
     }
 
     @Override
@@ -20,10 +20,12 @@ public class UserStatusConverter implements AttributeConverter<UserStatus, Strin
         if (dbData == null) {
             return null;
         }
-        try {
-            return UserStatus.valueOf(dbData.toUpperCase().trim());
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Unknown status value in database: " + dbData);
+        String trimmed = dbData.trim();
+        for (UserStatus s : UserStatus.values()) {
+            if (s.name().equalsIgnoreCase(trimmed)) {
+                return s;
+            }
         }
+        throw new IllegalArgumentException("Unknown database value for UserStatus: " + dbData);
     }
 }

@@ -46,6 +46,9 @@ class HorsesRacingApplicationTests {
     @Autowired
     private JwtService jwtService;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     private static final java.util.Set<Long> preExistingUserIds = new java.util.HashSet<>();
 
     @BeforeEach
@@ -76,7 +79,7 @@ class HorsesRacingApplicationTests {
                 .email("owner@gmail.com")
                 .password("123456")
                 .phone("0900000000")
-                .role(Role.HORSE_OWNER)
+                .role(Role.OWNER)
                 .build();
 
         MvcResult result = mockMvc.perform(post("/api/auth/register")
@@ -92,7 +95,7 @@ class HorsesRacingApplicationTests {
         return "Bearer " + response.getToken();
     }
 
-    // 1. Register HORSE_OWNER -> Expected: 200 OK and token returned
+    // 1. Register OWNER -> Expected: 200 OK and token returned
     @Test
     void testRegisterHorseOwner() throws Exception {
         RegisterRequest req = RegisterRequest.builder()
@@ -100,7 +103,7 @@ class HorsesRacingApplicationTests {
                 .email("owner@gmail.com")
                 .password("123456")
                 .phone("0900000000")
-                .role(Role.HORSE_OWNER)
+                .role(Role.OWNER)
                 .build();
 
         MvcResult result = mockMvc.perform(post("/api/auth/register")
@@ -113,7 +116,7 @@ class HorsesRacingApplicationTests {
         assertNotNull(response.getToken());
         assertEquals("owner@gmail.com", response.getEmail());
         assertEquals("0900000000", response.getPhone());
-        assertEquals(Role.HORSE_OWNER, response.getRole());
+        assertEquals(Role.OWNER, response.getRole());
     }
 
     // 2. Register JOCKEY -> Expected: 200 OK and token returned
@@ -181,7 +184,7 @@ class HorsesRacingApplicationTests {
                 .andExpect(status().isBadRequest());
     }
 
-    // 5. Register RACE_REFEREE using /api/auth/register -> Expected: 400 Bad Request (restricted role)
+    // 5. Register REFEREE using /api/auth/register -> Expected: 400 Bad Request (restricted role)
     @Test
     void testRegisterRefereePubliclyFails() throws Exception {
         RegisterRequest req = RegisterRequest.builder()
@@ -189,7 +192,7 @@ class HorsesRacingApplicationTests {
                 .email("referee_new@gmail.com")
                 .password("123456")
                 .phone("0904444444")
-                .role(Role.RACE_REFEREE)
+                .role(Role.REFEREE)
                 .build();
 
         mockMvc.perform(post("/api/auth/register")
@@ -219,9 +222,10 @@ class HorsesRacingApplicationTests {
         assertNotNull(response.getToken());
         assertEquals("owner@gmail.com", response.getEmail());
         assertEquals("0900000000", response.getPhone());
+        assertEquals(Role.OWNER, response.getRole());
     }
 
-    // 7. Login with wrong password -> Expected: error (400 Bad Request or 401 Unauthorized depend on Security mapping, AuthController returns 400 Bad Request)
+    // 7. Login with wrong password -> Expected: error
     @Test
     void testLoginWithWrongPassword() throws Exception {
         testRegisterHorseOwner();
@@ -245,7 +249,7 @@ class HorsesRacingApplicationTests {
                 .email("referee@gmail.com")
                 .password("123456")
                 .phone("0922222222")
-                .role(Role.RACE_REFEREE)
+                .role(Role.REFEREE)
                 .build();
 
         mockMvc.perform(post("/api/admin/users")
@@ -254,7 +258,7 @@ class HorsesRacingApplicationTests {
                 .andExpect(status().isUnauthorized());
     }
 
-    // 9. Call POST /api/admin/users with HORSE_OWNER token -> Expected: 403 Forbidden
+    // 9. Call POST /api/admin/users with OWNER token -> Expected: 403 Forbidden
     @Test
     void testAdminCreateUserWithOwnerToken() throws Exception {
         String ownerToken = getHorseOwnerToken();
@@ -264,7 +268,7 @@ class HorsesRacingApplicationTests {
                 .email("referee@gmail.com")
                 .password("123456")
                 .phone("0922222222")
-                .role(Role.RACE_REFEREE)
+                .role(Role.REFEREE)
                 .build();
 
         mockMvc.perform(post("/api/admin/users")
@@ -284,7 +288,7 @@ class HorsesRacingApplicationTests {
                 .email("referee@gmail.com")
                 .password("123456")
                 .phone("0922222222")
-                .role(Role.RACE_REFEREE)
+                .role(Role.REFEREE)
                 .build();
 
         MvcResult result = mockMvc.perform(post("/api/admin/users")
@@ -298,11 +302,11 @@ class HorsesRacingApplicationTests {
         assertNotNull(response.getUserId());
         assertEquals("referee@gmail.com", response.getEmail());
         assertEquals("0922222222", response.getPhone());
-        assertEquals(Role.RACE_REFEREE, response.getRole());
+        assertEquals(Role.REFEREE, response.getRole());
         assertEquals(UserStatus.ACTIVE, response.getStatus());
     }
 
-    // 11. Admin creates RACE_REFEREE account -> Expected: account created successfully, password stored as BCrypt hash
+    // 11. Admin creates REFEREE account -> Expected: account created successfully, password stored as BCrypt hash
     @Test
     void testAdminCreatesRefereeAndBCryptHash() throws Exception {
         testAdminCreateUserWithAdminToken();
@@ -313,7 +317,7 @@ class HorsesRacingApplicationTests {
         assertNotEquals("123456", savedUser.getPasswordHash());
     }
 
-    // 12. Admin tries to create HORSE_OWNER using /api/admin/users -> Expected: error
+    // 12. Admin tries to create OWNER using /api/admin/users -> Expected: error
     @Test
     void testAdminCreatesHorseOwnerFails() throws Exception {
         String adminToken = getAdminToken();
@@ -323,7 +327,7 @@ class HorsesRacingApplicationTests {
                 .email("ownerb@gmail.com")
                 .password("123456")
                 .phone("0900000001")
-                .role(Role.HORSE_OWNER)
+                .role(Role.OWNER)
                 .build();
 
         mockMvc.perform(post("/api/admin/users")
@@ -402,5 +406,28 @@ class HorsesRacingApplicationTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isForbidden());
+    }
+
+    // 16. Verify database still stores lowercase values (admin, staff, owner, referee, jockey, spectator)
+    @Test
+    void testDatabaseStoresLowercaseValues() throws Exception {
+        // Perform registration of owner
+        testRegisterHorseOwner();
+
+        // Perform admin creation of referee
+        testAdminCreateUserWithAdminToken();
+
+        // Query the database directly to bypass JPA converters
+        java.util.Map<String, Object> dbOwner = jdbcTemplate.queryForMap(
+                "SELECT role, status FROM [user] WHERE email = 'owner@gmail.com'"
+        );
+        assertEquals("owner", dbOwner.get("role"));
+        assertEquals("active", dbOwner.get("status"));
+
+        java.util.Map<String, Object> dbReferee = jdbcTemplate.queryForMap(
+                "SELECT role, status FROM [user] WHERE email = 'referee@gmail.com'"
+        );
+        assertEquals("referee", dbReferee.get("role"));
+        assertEquals("active", dbReferee.get("status"));
     }
 }

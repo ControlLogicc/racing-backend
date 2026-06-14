@@ -6,7 +6,7 @@
 	},
 	"item": [
 		{
-			"name": "1. Register HORSE_OWNER",
+			"name": "1. Register OWNER",
 			"request": {
 				"method": "POST",
 				"header": [
@@ -17,7 +17,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Owner A\",\n    \"email\": \"owner@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0900000000\",\n    \"role\": \"HORSE_OWNER\"\n}"
+					"raw": "{\n    \"fullName\": \"Owner A\",\n    \"email\": \"owner@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0900000000\",\n    \"role\": \"OWNER\"\n}"
 				},
 				"url": {
 					"raw": "{{baseUrl}}/api/auth/register",
@@ -151,7 +151,7 @@
 			"response": []
 		},
 		{
-			"name": "6. Register RACE_REFEREE using /api/auth/register",
+			"name": "6. Register REFEREE using /api/auth/register",
 			"request": {
 				"method": "POST",
 				"header": [
@@ -162,7 +162,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee_new@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0904444444\",\n    \"role\": \"RACE_REFEREE\"\n}"
+					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee_new@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0904444444\",\n    \"role\": \"REFEREE\"\n}"
 				},
 				"url": {
 					"raw": "{{baseUrl}}/api/auth/register",
@@ -175,7 +175,7 @@
 						"register"
 					]
 				},
-				"description": "Expected: error because RACE_REFEREE cannot register publicly."
+				"description": "Expected: error because REFEREE cannot register publicly."
 			},
 			"response": []
 		},
@@ -249,7 +249,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0922222222\",\n    \"role\": \"RACE_REFEREE\"\n}"
+					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0922222222\",\n    \"role\": \"REFEREE\"\n}"
 				},
 				"url": {
 					"raw": "{{baseUrl}}/api/admin/users",
@@ -267,7 +267,7 @@
 			"response": []
 		},
 		{
-			"name": "10. Call POST /api/admin/users with HORSE_OWNER token",
+			"name": "10. Call POST /api/admin/users with OWNER token",
 			"request": {
 				"method": "POST",
 				"header": [
@@ -282,7 +282,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0922222222\",\n    \"role\": \"RACE_REFEREE\"\n}"
+					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0922222222\",\n    \"role\": \"REFEREE\"\n}"
 				},
 				"url": {
 					"raw": "{{baseUrl}}/api/admin/users",
@@ -333,7 +333,7 @@
 			"response": []
 		},
 		{
-			"name": "12. Call POST /api/admin/users with ADMIN token and role RACE_REFEREE",
+			"name": "12. Call POST /api/admin/users with ADMIN token and role REFEREE",
 			"request": {
 				"method": "POST",
 				"header": [
@@ -348,7 +348,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0922222222\",\n    \"role\": \"RACE_REFEREE\"\n}"
+					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0922222222\",\n    \"role\": \"REFEREE\"\n}"
 				},
 				"url": {
 					"raw": "{{baseUrl}}/api/admin/users",
@@ -361,12 +361,12 @@
 						"users"
 					]
 				},
-				"description": "Expected: 200 OK and RACE_REFEREE account created."
+				"description": "Expected: 200 OK and REFEREE account created."
 			},
 			"response": []
 		},
 		{
-			"name": "13. Admin tries to create HORSE_OWNER using /api/admin/users",
+			"name": "13. Admin tries to create OWNER using /api/admin/users",
 			"request": {
 				"method": "POST",
 				"header": [
@@ -381,7 +381,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Owner B\",\n    \"email\": \"ownerb@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0900000001\",\n    \"role\": \"HORSE_OWNER\"\n}"
+					"raw": "{\n    \"fullName\": \"Owner B\",\n    \"email\": \"ownerb@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0900000001\",\n    \"role\": \"OWNER\"\n}"
 				},
 				"url": {
 					"raw": "{{baseUrl}}/api/admin/users",
@@ -394,7 +394,7 @@
 						"users"
 					]
 				},
-				"description": "Expected: error because HORSE_OWNER should register publicly."
+				"description": "Expected: error because OWNER should register publicly."
 			},
 			"response": []
 		}

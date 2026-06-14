@@ -3,8 +3,8 @@ package com.solofounder.horseracing.model.enums;
 public enum Role {
     ADMIN,
     STAFF,
-    HORSE_OWNER,
+    OWNER,
+    REFEREE,
     JOCKEY,
-    RACE_REFEREE,
     SPECTATOR
 }

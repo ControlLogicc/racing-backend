@@ -28,8 +28,8 @@ public class AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
 
-    private static final Set<Role> PUBLIC_ROLES = Set.of(Role.HORSE_OWNER, Role.JOCKEY, Role.SPECTATOR);
-    private static final Set<Role> ADMIN_ROLES = Set.of(Role.ADMIN, Role.STAFF, Role.RACE_REFEREE);
+    private static final Set<Role> PUBLIC_ROLES = Set.of(Role.OWNER, Role.JOCKEY, Role.SPECTATOR);
+    private static final Set<Role> ADMIN_ROLES = Set.of(Role.ADMIN, Role.STAFF, Role.REFEREE);
 
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
