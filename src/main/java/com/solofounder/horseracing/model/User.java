@@ -1,6 +1,8 @@
 package com.solofounder.horseracing.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.solofounder.horseracing.model.converter.RoleConverter;
+import com.solofounder.horseracing.model.converter.UserStatusConverter;
 import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.model.enums.UserStatus;
 import jakarta.persistence.*;
@@ -14,7 +16,7 @@ import java.util.Collection;
 import java.util.List;
 
 @Entity
-@Table(name = "users")
+@Table(name = "[user]", schema = "dbo")
 @Data
 @Builder
 @NoArgsConstructor
@@ -26,25 +28,25 @@ public class User implements UserDetails {
     @Column(name = "user_id")
     private Long userId;
 
-    @Column(name = "full_name", nullable = false, length = 100)
+    @Column(name = "full_name", nullable = false, length = 150)
     private String fullName;
 
-    @Column(name = "email", nullable = false, unique = true, length = 100)
+    @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
 
     @Column(name = "password_hash", nullable = false, length = 255)
     @JsonIgnore
     private String passwordHash;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "role", nullable = false, length = 30)
+    @Convert(converter = RoleConverter.class)
+    @Column(name = "role", nullable = false, length = 20)
     private Role role;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 30)
+    @Convert(converter = UserStatusConverter.class)
+    @Column(name = "status", nullable = false, length = 20)
     private UserStatus status;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     @PrePersist

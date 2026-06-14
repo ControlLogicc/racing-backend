@@ -5,6 +5,8 @@ import com.solofounder.horseracing.dto.auth.AuthResponse;
 import com.solofounder.horseracing.dto.auth.LoginRequest;
 import com.solofounder.horseracing.dto.auth.RegisterRequest;
 import com.solofounder.horseracing.dto.user.CreateInternalUserRequest;
+import com.solofounder.horseracing.dto.user.UpdateUserStatusRequest;
+import com.solofounder.horseracing.dto.user.UserResponse;
 import com.solofounder.horseracing.model.User;
 import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.model.enums.UserStatus;
@@ -22,6 +24,8 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -281,7 +285,7 @@ class HorsesRacingApplicationTests {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        User response = objectMapper.readValue(result.getResponse().getContentAsString(), User.class);
+        UserResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), UserResponse.class);
         assertNotNull(response.getUserId());
         assertEquals("referee@gmail.com", response.getEmail());
         assertEquals(Role.RACE_REFEREE, response.getRole());
@@ -316,5 +320,86 @@ class HorsesRacingApplicationTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testGetAllUsersWithoutToken() throws Exception {
+        mockMvc.perform(get("/api/admin/users"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void testGetAllUsersWithOwnerToken() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+
+        mockMvc.perform(get("/api/admin/users")
+                        .header("Authorization", ownerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void testGetAllUsersWithAdminToken() throws Exception {
+        String adminToken = getAdminToken();
+
+        mockMvc.perform(get("/api/admin/users")
+                        .header("Authorization", adminToken))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testGetUserByIdNotFound() throws Exception {
+        String adminToken = getAdminToken();
+
+        mockMvc.perform(get("/api/admin/users/{id}", 999999L)
+                        .header("Authorization", adminToken))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void testUpdateUserStatusWithAdminToken() throws Exception {
+        String adminToken = getAdminToken();
+
+        User user = User.builder()
+                .fullName("Status User")
+                .email("status-user@gmail.com")
+                .passwordHash(passwordEncoder.encode("123456"))
+                .role(Role.SPECTATOR)
+                .status(UserStatus.ACTIVE)
+                .build();
+        User savedUser = userRepository.save(user);
+
+        UpdateUserStatusRequest req = UpdateUserStatusRequest.builder()
+                .status(UserStatus.SUSPENDED)
+                .build();
+
+        MvcResult result = mockMvc.perform(patch("/api/admin/users/{id}/status", savedUser.getUserId())
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        UserResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), UserResponse.class);
+        assertEquals(UserStatus.SUSPENDED, response.getStatus());
+    }
+
+    @Test
+    void testAdminCreatesPublicRolesFails() throws Exception {
+        String adminToken = getAdminToken();
+
+        for (Role role : java.util.List.of(Role.HORSE_OWNER, Role.JOCKEY, Role.SPECTATOR)) {
+            CreateInternalUserRequest req = CreateInternalUserRequest.builder()
+                    .fullName("Public Role " + role.name())
+                    .email(role.name().toLowerCase() + "@gmail.com")
+                    .password("123456")
+                    .role(role)
+                    .build();
+
+            mockMvc.perform(post("/api/admin/users")
+                            .header("Authorization", adminToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(req)))
+                    .andExpect(status().isBadRequest());
+        }
     }
 }
