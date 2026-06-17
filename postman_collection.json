@@ -1,0 +1,439 @@
+{
+	"info": {
+		"_postman_id": "8f8e7d80-5a3d-4cde-bb71-8bcddcf9f4d9",
+		"name": "Horse Racing Auth & Role 13 Tests",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Register OWNER",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"fullName\": \"Owner A\",\n    \"email\": \"owner@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0900000000\",\n    \"role\": \"OWNER\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/register",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"auth",
+						"register"
+					]
+				},
+				"description": "Expected: 200 OK and token returned."
+			},
+			"response": []
+		},
+		{
+			"name": "2. Register JOCKEY",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"fullName\": \"Jockey A\",\n    \"email\": \"jockey@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0901111111\",\n    \"role\": \"JOCKEY\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/register",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"auth",
+						"register"
+					]
+				},
+				"description": "Expected: 200 OK and token returned."
+			},
+			"response": []
+		},
+		{
+			"name": "3. Register SPECTATOR",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"fullName\": \"Spectator A\",\n    \"email\": \"spectator@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0902222222\",\n    \"role\": \"SPECTATOR\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/register",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"auth",
+						"register"
+					]
+				},
+				"description": "Expected: 200 OK and token returned."
+			},
+			"response": []
+		},
+		{
+			"name": "4. Register ADMIN using /api/auth/register",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"fullName\": \"Admin A\",\n    \"email\": \"admin_new@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0903333333\",\n    \"role\": \"ADMIN\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/register",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"auth",
+						"register"
+					]
+				},
+				"description": "Expected: error because ADMIN cannot register publicly."
+			},
+			"response": []
+		},
+		{
+			"name": "5. Register STAFF using /api/auth/register",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"fullName\": \"Staff A\",\n    \"email\": \"staff-public@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0911111111\",\n    \"role\": \"STAFF\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/register",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"auth",
+						"register"
+					]
+				},
+				"description": "Expected: error because STAFF cannot register publicly."
+			},
+			"response": []
+		},
+		{
+			"name": "6. Register REFEREE using /api/auth/register",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee_new@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0904444444\",\n    \"role\": \"REFEREE\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/register",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"auth",
+						"register"
+					]
+				},
+				"description": "Expected: error because REFEREE cannot register publicly."
+			},
+			"response": []
+		},
+		{
+			"name": "7. Login with correct email/password",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"owner@gmail.com\",\n    \"password\": \"123456\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/login",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"auth",
+						"login"
+					]
+				},
+				"description": "Expected: 200 OK and token returned."
+			},
+			"response": []
+		},
+		{
+			"name": "8. Login with wrong password",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"owner@gmail.com\",\n    \"password\": \"wrongpassword\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/login",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"auth",
+						"login"
+					]
+				},
+				"description": "Expected: error."
+			},
+			"response": []
+		},
+		{
+			"name": "9. Call POST /api/admin/users without token",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0922222222\",\n    \"role\": \"REFEREE\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/admin/users",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"admin",
+						"users"
+					]
+				},
+				"description": "Expected: 401 Unauthorized."
+			},
+			"response": []
+		},
+		{
+			"name": "10. Call POST /api/admin/users with OWNER token",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{ownerToken}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0922222222\",\n    \"role\": \"REFEREE\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/admin/users",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"admin",
+						"users"
+					]
+				},
+				"description": "Expected: 403 Forbidden."
+			},
+			"response": []
+		},
+		{
+			"name": "11. Call POST /api/admin/users with ADMIN token and role STAFF",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{adminToken}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"fullName\": \"Staff A\",\n    \"email\": \"staff@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0911111111\",\n    \"role\": \"STAFF\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/admin/users",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"admin",
+						"users"
+					]
+				},
+				"description": "Expected: 200 OK and STAFF account created."
+			},
+			"response": []
+		},
+		{
+			"name": "12. Call POST /api/admin/users with ADMIN token and role REFEREE",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{adminToken}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0922222222\",\n    \"role\": \"REFEREE\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/admin/users",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"admin",
+						"users"
+					]
+				},
+				"description": "Expected: 200 OK and REFEREE account created."
+			},
+			"response": []
+		},
+		{
+			"name": "13. Admin tries to create OWNER using /api/admin/users",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{adminToken}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"fullName\": \"Owner B\",\n    \"email\": \"ownerb@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0900000001\",\n    \"role\": \"OWNER\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/admin/users",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"admin",
+						"users"
+					]
+				},
+				"description": "Expected: error because OWNER should register publicly."
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "adminToken",
+			"value": "YOUR_ADMIN_JWT_TOKEN",
+			"type": "string"
+		},
+		{
+			"key": "ownerToken",
+			"value": "YOUR_OWNER_JWT_TOKEN",
+			"type": "string"
+		}
+	]
+}
