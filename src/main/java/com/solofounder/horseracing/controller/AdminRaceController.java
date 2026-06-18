@@ -1,0 +1,51 @@
+package com.solofounder.horseracing.controller;
+
+import com.solofounder.horseracing.dto.race.RaceRequest;
+import com.solofounder.horseracing.dto.race.RaceResponse;
+import com.solofounder.horseracing.service.RaceService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/admin/races")
+@RequiredArgsConstructor
+public class AdminRaceController {
+
+    private final RaceService raceService;
+
+    @GetMapping
+    public ResponseEntity<List<RaceResponse>> getAllRaces() {
+        return ResponseEntity.ok(raceService.getAllRaces());
+    }
+
+    @GetMapping("/open")
+    public ResponseEntity<List<RaceResponse>> getOpenRacesForAdmin() {
+        return ResponseEntity.ok(raceService.getOpenRaces());
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<RaceResponse> getRace(@PathVariable Long id) {
+        return ResponseEntity.ok(raceService.getRace(id));
+    }
+
+    @PostMapping
+    public ResponseEntity<RaceResponse> createRace(@Valid @RequestBody RaceRequest request) {
+        return ResponseEntity.ok(raceService.createRace(request));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<RaceResponse> updateRace(@PathVariable Long id,
+                                                   @Valid @RequestBody RaceRequest request) {
+        return ResponseEntity.ok(raceService.updateRace(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteRace(@PathVariable Long id) {
+        raceService.deleteRace(id);
+        return ResponseEntity.noContent().build();
+    }
+}

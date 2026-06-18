@@ -1,439 +1,261 @@
 {
-	"info": {
-		"_postman_id": "8f8e7d80-5a3d-4cde-bb71-8bcddcf9f4d9",
-		"name": "Horse Racing Auth & Role 13 Tests",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-	},
-	"item": [
-		{
-			"name": "1. Register OWNER",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Owner A\",\n    \"email\": \"owner@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0900000000\",\n    \"role\": \"OWNER\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/auth/register",
-					"host": [
-						"{{baseUrl}}"
-					],
-					"path": [
-						"api",
-						"auth",
-						"register"
-					]
-				},
-				"description": "Expected: 200 OK and token returned."
-			},
-			"response": []
-		},
-		{
-			"name": "2. Register JOCKEY",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Jockey A\",\n    \"email\": \"jockey@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0901111111\",\n    \"role\": \"JOCKEY\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/auth/register",
-					"host": [
-						"{{baseUrl}}"
-					],
-					"path": [
-						"api",
-						"auth",
-						"register"
-					]
-				},
-				"description": "Expected: 200 OK and token returned."
-			},
-			"response": []
-		},
-		{
-			"name": "3. Register SPECTATOR",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Spectator A\",\n    \"email\": \"spectator@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0902222222\",\n    \"role\": \"SPECTATOR\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/auth/register",
-					"host": [
-						"{{baseUrl}}"
-					],
-					"path": [
-						"api",
-						"auth",
-						"register"
-					]
-				},
-				"description": "Expected: 200 OK and token returned."
-			},
-			"response": []
-		},
-		{
-			"name": "4. Register ADMIN using /api/auth/register",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Admin A\",\n    \"email\": \"admin_new@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0903333333\",\n    \"role\": \"ADMIN\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/auth/register",
-					"host": [
-						"{{baseUrl}}"
-					],
-					"path": [
-						"api",
-						"auth",
-						"register"
-					]
-				},
-				"description": "Expected: error because ADMIN cannot register publicly."
-			},
-			"response": []
-		},
-		{
-			"name": "5. Register STAFF using /api/auth/register",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Staff A\",\n    \"email\": \"staff-public@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0911111111\",\n    \"role\": \"STAFF\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/auth/register",
-					"host": [
-						"{{baseUrl}}"
-					],
-					"path": [
-						"api",
-						"auth",
-						"register"
-					]
-				},
-				"description": "Expected: error because STAFF cannot register publicly."
-			},
-			"response": []
-		},
-		{
-			"name": "6. Register REFEREE using /api/auth/register",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee_new@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0904444444\",\n    \"role\": \"REFEREE\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/auth/register",
-					"host": [
-						"{{baseUrl}}"
-					],
-					"path": [
-						"api",
-						"auth",
-						"register"
-					]
-				},
-				"description": "Expected: error because REFEREE cannot register publicly."
-			},
-			"response": []
-		},
-		{
-			"name": "7. Login with correct email/password",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"email\": \"owner@gmail.com\",\n    \"password\": \"123456\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/auth/login",
-					"host": [
-						"{{baseUrl}}"
-					],
-					"path": [
-						"api",
-						"auth",
-						"login"
-					]
-				},
-				"description": "Expected: 200 OK and token returned."
-			},
-			"response": []
-		},
-		{
-			"name": "8. Login with wrong password",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"email\": \"owner@gmail.com\",\n    \"password\": \"wrongpassword\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/auth/login",
-					"host": [
-						"{{baseUrl}}"
-					],
-					"path": [
-						"api",
-						"auth",
-						"login"
-					]
-				},
-				"description": "Expected: error."
-			},
-			"response": []
-		},
-		{
-			"name": "9. Call POST /api/admin/users without token",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0922222222\",\n    \"role\": \"REFEREE\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/admin/users",
-					"host": [
-						"{{baseUrl}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"users"
-					]
-				},
-				"description": "Expected: 401 Unauthorized."
-			},
-			"response": []
-		},
-		{
-			"name": "10. Call POST /api/admin/users with OWNER token",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer {{ownerToken}}"
-					},
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0922222222\",\n    \"role\": \"REFEREE\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/admin/users",
-					"host": [
-						"{{baseUrl}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"users"
-					]
-				},
-				"description": "Expected: 403 Forbidden."
-			},
-			"response": []
-		},
-		{
-			"name": "11. Call POST /api/admin/users with ADMIN token and role STAFF",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer {{adminToken}}"
-					},
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Staff A\",\n    \"email\": \"staff@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0911111111\",\n    \"role\": \"STAFF\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/admin/users",
-					"host": [
-						"{{baseUrl}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"users"
-					]
-				},
-				"description": "Expected: 200 OK and STAFF account created."
-			},
-			"response": []
-		},
-		{
-			"name": "12. Call POST /api/admin/users with ADMIN token and role REFEREE",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer {{adminToken}}"
-					},
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Referee A\",\n    \"email\": \"referee@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0922222222\",\n    \"role\": \"REFEREE\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/admin/users",
-					"host": [
-						"{{baseUrl}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"users"
-					]
-				},
-				"description": "Expected: 200 OK and REFEREE account created."
-			},
-			"response": []
-		},
-		{
-			"name": "13. Admin tries to create OWNER using /api/admin/users",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer {{adminToken}}"
-					},
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"fullName\": \"Owner B\",\n    \"email\": \"ownerb@gmail.com\",\n    \"password\": \"123456\",\n    \"phone\": \"0900000001\",\n    \"role\": \"OWNER\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/admin/users",
-					"host": [
-						"{{baseUrl}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"users"
-					]
-				},
-				"description": "Expected: error because OWNER should register publicly."
-			},
-			"response": []
-		}
-	],
-	"event": [
-		{
-			"listen": "prerequest",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					""
-				]
-			}
-		},
-		{
-			"listen": "test",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					""
-				]
-			}
-		}
-	],
-	"variable": [
-		{
-			"key": "baseUrl",
-			"value": "http://localhost:8080",
-			"type": "string"
-		},
-		{
-			"key": "adminToken",
-			"value": "YOUR_ADMIN_JWT_TOKEN",
-			"type": "string"
-		},
-		{
-			"key": "ownerToken",
-			"value": "YOUR_OWNER_JWT_TOKEN",
-			"type": "string"
-		}
-	]
+  "info": {
+    "_postman_id": "8f8e7d80-5a3d-4cde-bb71-8bcddcf9f4d9",
+    "name": "Horse Racing Foundation APIs - Admin CRUD, Horse, Jockey",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Auth login ADMIN",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"email\": \"admin@gmail.com\",\n  \"password\": \"123456\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"]},
+        "description": "Expected 200. Copy token to adminToken."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Auth login OWNER",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"email\": \"owner@gmail.com\",\n  \"password\": \"123456\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"]},
+        "description": "Expected 200. Copy token to ownerToken."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Auth login JOCKEY",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"email\": \"jockey@gmail.com\",\n  \"password\": \"123456\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"]},
+        "description": "Expected 200. Copy token to jockeyToken and userId to jockeyUserId."
+      },
+      "response": []
+    },
+    {
+      "name": "4. ADMIN create racecourse",
+      "request": {
+        "method": "POST",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{adminToken}}", "type": "string"}]},
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"racecourseName\": \"Main Racecourse\",\n  \"location\": \"HCMC\",\n  \"surfaceType\": \"turf\",\n  \"capacity\": 12000\n}"},
+        "url": {"raw": "{{baseUrl}}/api/admin/racecourses", "host": ["{{baseUrl}}"], "path": ["api", "admin", "racecourses"]},
+        "description": "Expected 200. Save racecourseId."
+      },
+      "response": []
+    },
+    {
+      "name": "5. ADMIN CRUD racecourse by id",
+      "request": {
+        "method": "PUT",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{adminToken}}", "type": "string"}]},
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"racecourseName\": \"Main Racecourse Updated\",\n  \"location\": \"HCMC\",\n  \"surfaceType\": \"dirt\",\n  \"capacity\": 13000\n}"},
+        "url": {"raw": "{{baseUrl}}/api/admin/racecourses/{{racecourseId}}", "host": ["{{baseUrl}}"], "path": ["api", "admin", "racecourses", "{{racecourseId}}"]},
+        "description": "Also test GET /api/admin/racecourses, GET /api/admin/racecourses/{id}, DELETE /api/admin/racecourses/{id}."
+      },
+      "response": []
+    },
+    {
+      "name": "6. ADMIN create season",
+      "request": {
+        "method": "POST",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{adminToken}}", "type": "string"}]},
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"seasonName\": \"Season 2026\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\",\n  \"status\": \"draft\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/admin/seasons", "host": ["{{baseUrl}}"], "path": ["api", "admin", "seasons"]},
+        "description": "Expected 200. Save seasonId. Also test GET/PUT/DELETE /api/admin/seasons/{id}."
+      },
+      "response": []
+    },
+    {
+      "name": "7. ADMIN create race meeting",
+      "request": {
+        "method": "POST",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{adminToken}}", "type": "string"}]},
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"seasonId\": {{seasonId}},\n  \"racecourseId\": {{racecourseId}},\n  \"meetingDate\": \"2026-06-20\",\n  \"status\": \"scheduled\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/admin/race-meetings", "host": ["{{baseUrl}}"], "path": ["api", "admin", "race-meetings"]},
+        "description": "Expected 200. Save meetingId. Also test GET/PUT/DELETE /api/admin/race-meetings/{id}."
+      },
+      "response": []
+    },
+    {
+      "name": "8. ADMIN create race",
+      "request": {
+        "method": "POST",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{adminToken}}", "type": "string"}]},
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"meetingId\": {{meetingId}},\n  \"conditionId\": {{conditionId}},\n  \"staffId\": {{staffId}},\n  \"refereeId\": {{refereeId}},\n  \"raceName\": \"Opening Race\",\n  \"raceNo\": 1,\n  \"scheduledTime\": \"2026-06-20T09:00:00\",\n  \"status\": \"registration_open\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/admin/races", "host": ["{{baseUrl}}"], "path": ["api", "admin", "races"]},
+        "description": "Expected 200. Requires conditionId from DB; staffId/refereeId may be null or existing profile ids. Save raceId."
+      },
+      "response": []
+    },
+    {
+      "name": "9. Get open races",
+      "request": {
+        "method": "GET",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{ownerToken}}", "type": "string"}]},
+        "header": [],
+        "url": {"raw": "{{baseUrl}}/api/races/open", "host": ["{{baseUrl}}"], "path": ["api", "races", "open"]},
+        "description": "Expected 200 for any authenticated user. Admin alternative: GET /api/admin/races/open."
+      },
+      "response": []
+    },
+    {
+      "name": "10. OWNER create horse",
+      "request": {
+        "method": "POST",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{ownerToken}}", "type": "string"}]},
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"horseName\": \"Owner Horse A\",\n  \"age\": 3,\n  \"gender\": \"M\",\n  \"breed\": \"Thoroughbred\",\n  \"horseClass\": 5,\n  \"status\": \"active\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/owner/horses", "host": ["{{baseUrl}}"], "path": ["api", "owner", "horses"]},
+        "description": "Expected 200. ownerId is taken from token. Save horseId. Also test GET/PUT/DELETE /api/owner/horses/{id}."
+      },
+      "response": []
+    },
+    {
+      "name": "11. ADMIN get/update horse",
+      "request": {
+        "method": "PUT",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{adminToken}}", "type": "string"}]},
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"horseName\": \"Admin Updated Horse\",\n  \"age\": 4,\n  \"gender\": \"F\",\n  \"breed\": \"Arabian\",\n  \"currentScore\": 0,\n  \"horseClass\": 4,\n  \"status\": \"active\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/admin/horses/{{horseId}}", "host": ["{{baseUrl}}"], "path": ["api", "admin", "horses", "{{horseId}}"]},
+        "description": "Also test GET /api/admin/horses, GET /api/admin/horses/{id}, DELETE /api/admin/horses/{id}."
+      },
+      "response": []
+    },
+    {
+      "name": "12. ADMIN create jockey profile",
+      "request": {
+        "method": "POST",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{adminToken}}", "type": "string"}]},
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"userId\": {{jockeyUserId}},\n  \"weight\": 52.5,\n  \"experienceYears\": 3,\n  \"status\": \"available\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/admin/jockeys", "host": ["{{baseUrl}}"], "path": ["api", "admin", "jockeys"]},
+        "description": "Expected 200 if user role is JOCKEY. Save jockeyId. Also test GET/PUT/DELETE /api/admin/jockeys/{id}."
+      },
+      "response": []
+    },
+    {
+      "name": "13. JOCKEY get/update profile",
+      "request": {
+        "method": "PUT",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{jockeyToken}}", "type": "string"}]},
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"weight\": 53.0,\n  \"experienceYears\": 4,\n  \"status\": \"available\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/jockey/profile", "host": ["{{baseUrl}}"], "path": ["api", "jockey", "profile"]},
+        "description": "Also test GET /api/jockey/profile."
+      },
+      "response": []
+    },
+    {
+      "name": "13.1 ADMIN create race condition",
+      "request": {
+        "method": "POST",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{adminToken}}", "type": "string"}]},
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"conditionName\": \"Sprint 1200m\",\n  \"distance\": 1200,\n  \"trackType\": \"turf\",\n  \"minEntries\": 3,\n  \"maxEntries\": 14,\n  \"classRequirement\": \"1-5\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/admin/race-conditions", "host": ["{{baseUrl}}"], "path": ["api", "admin", "race-conditions"]},
+        "description": "Expected 200. Save raceConditionId. Also test GET/PUT/DELETE /api/admin/race-conditions/{id}."
+      },
+      "response": []
+    },
+    {
+      "name": "13.2 ADMIN update race condition",
+      "request": {
+        "method": "PUT",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{adminToken}}", "type": "string"}]},
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"conditionName\": \"Sprint 1200m Updated\",\n  \"distance\": 1200,\n  \"trackType\": \"dirt\",\n  \"minEntries\": 3,\n  \"maxEntries\": 12,\n  \"classRequirement\": \"1-5\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/admin/race-conditions/{{raceConditionId}}", "host": ["{{baseUrl}}"], "path": ["api", "admin", "race-conditions", "{{raceConditionId}}"]},
+        "description": "Expected 200. GET /api/admin/race-conditions and GET /api/admin/race-conditions/{id} should also return 200."
+      },
+      "response": []
+    },
+    {
+      "name": "13.3 ADMIN create prize structure",
+      "request": {
+        "method": "POST",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{adminToken}}", "type": "string"}]},
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"raceId\": {{raceId}},\n  \"position\": 1,\n  \"amount\": 1000000,\n  \"score\": 10\n}"},
+        "url": {"raw": "{{baseUrl}}/api/admin/prize-structures", "host": ["{{baseUrl}}"], "path": ["api", "admin", "prize-structures"]},
+        "description": "Expected 200. Save prizeStructureId. Requires existing raceId."
+      },
+      "response": []
+    },
+    {
+      "name": "13.4 ADMIN update prize structure",
+      "request": {
+        "method": "PUT",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{adminToken}}", "type": "string"}]},
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"raceId\": {{raceId}},\n  \"position\": 1,\n  \"amount\": 1500000,\n  \"score\": 12\n}"},
+        "url": {"raw": "{{baseUrl}}/api/admin/prize-structures/{{prizeStructureId}}", "host": ["{{baseUrl}}"], "path": ["api", "admin", "prize-structures", "{{prizeStructureId}}"]},
+        "description": "Expected 200. GET /api/admin/prize-structures and GET /api/admin/prize-structures/{id} should also return 200."
+      },
+      "response": []
+    },
+    {
+      "name": "14. Wrong role should be 403",
+      "request": {
+        "method": "GET",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{ownerToken}}", "type": "string"}]},
+        "header": [],
+        "url": {"raw": "{{baseUrl}}/api/admin/races", "host": ["{{baseUrl}}"], "path": ["api", "admin", "races"]},
+        "description": "Expected 403 because OWNER cannot call /api/admin/**."
+      },
+      "response": []
+    },
+    {
+      "name": "15. ID not found should be 404",
+      "request": {
+        "method": "GET",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{adminToken}}", "type": "string"}]},
+        "header": [],
+        "url": {"raw": "{{baseUrl}}/api/admin/races/999999999", "host": ["{{baseUrl}}"], "path": ["api", "admin", "races", "999999999"]},
+        "description": "Expected 404."
+      },
+      "response": []
+    },
+    {
+      "name": "16. Validation should be 400",
+      "request": {
+        "method": "POST",
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{adminToken}}", "type": "string"}]},
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"seasonName\": \"Bad Season\",\n  \"startDate\": \"2026-12-31\",\n  \"endDate\": \"2026-01-01\",\n  \"status\": \"draft\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/admin/seasons", "host": ["{{baseUrl}}"], "path": ["api", "admin", "seasons"]},
+        "description": "Expected 400 because startDate is after endDate."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost:8080"},
+    {"key": "adminToken", "value": ""},
+    {"key": "ownerToken", "value": ""},
+    {"key": "jockeyToken", "value": ""},
+    {"key": "racecourseId", "value": ""},
+    {"key": "seasonId", "value": ""},
+    {"key": "meetingId", "value": ""},
+    {"key": "raceId", "value": ""},
+    {"key": "horseId", "value": ""},
+    {"key": "jockeyId", "value": ""},
+    {"key": "jockeyUserId", "value": ""},
+    {"key": "raceConditionId", "value": ""},
+    {"key": "prizeStructureId", "value": ""},
+    {"key": "conditionId", "value": "1"},
+    {"key": "staffId", "value": "null"},
+    {"key": "refereeId", "value": "null"}
+  ]
 }
