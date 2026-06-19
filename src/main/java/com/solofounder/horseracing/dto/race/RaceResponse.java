@@ -20,6 +20,14 @@ public class RaceResponse {
     private String raceName;
     private Short raceNo;
     private LocalDateTime scheduledTime;
+    private LocalDateTime registrationOpenAt;
+    private LocalDateTime registrationCloseAt;
+    private String meetingName;
+    private java.time.LocalDate meetingDate;
+    private String racecourseName;
+    private Integer distanceMeters;
+    private String trackType;
+    private String classRequirement;
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

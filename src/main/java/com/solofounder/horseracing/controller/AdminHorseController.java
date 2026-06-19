@@ -1,6 +1,6 @@
 package com.solofounder.horseracing.controller;
 
-import com.solofounder.horseracing.dto.horse.HorseRequest;
+import com.solofounder.horseracing.dto.horse.UpdateHorseRequest;
 import com.solofounder.horseracing.dto.horse.HorseResponse;
 import com.solofounder.horseracing.service.HorseService;
 import jakarta.validation.Valid;
@@ -29,7 +29,7 @@ public class AdminHorseController {
 
     @PutMapping("/{id}")
     public ResponseEntity<HorseResponse> updateHorse(@PathVariable Long id,
-                                                     @Valid @RequestBody HorseRequest request) {
+                                                     @Valid @RequestBody UpdateHorseRequest request) {
         return ResponseEntity.ok(horseService.updateHorse(id, request));
     }
 

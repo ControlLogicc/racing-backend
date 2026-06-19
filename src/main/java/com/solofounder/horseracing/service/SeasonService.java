@@ -110,7 +110,7 @@ public class SeasonService {
                 .seasonName(season.getSeasonName())
                 .startDate(season.getStartDate())
                 .endDate(season.getEndDate())
-                .status(season.getStatus())
+                .status(season.getStatus() != null ? season.getStatus().toUpperCase() : "DRAFT")
                 .createdAt(season.getCreatedAt())
                 .build();
     }

@@ -1,6 +1,7 @@
 package com.solofounder.horseracing.controller;
 
-import com.solofounder.horseracing.dto.horse.HorseRequest;
+import com.solofounder.horseracing.dto.horse.CreateHorseRequest;
+import com.solofounder.horseracing.dto.horse.UpdateHorseRequest;
 import com.solofounder.horseracing.dto.horse.HorseResponse;
 import com.solofounder.horseracing.service.HorseService;
 import jakarta.validation.Valid;
@@ -28,13 +29,13 @@ public class OwnerHorseController {
     }
 
     @PostMapping
-    public ResponseEntity<HorseResponse> createOwnerHorse(@Valid @RequestBody HorseRequest request) {
+    public ResponseEntity<HorseResponse> createOwnerHorse(@Valid @RequestBody CreateHorseRequest request) {
         return ResponseEntity.ok(horseService.createOwnerHorse(request));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<HorseResponse> updateOwnerHorse(@PathVariable Long id,
-                                                          @Valid @RequestBody HorseRequest request) {
+                                                          @Valid @RequestBody UpdateHorseRequest request) {
         return ResponseEntity.ok(horseService.updateOwnerHorse(id, request));
     }
 

@@ -37,6 +37,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/owner/**").hasRole("OWNER")
                         .requestMatchers("/api/jockey/**").hasRole("JOCKEY")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/race-management/**").hasAnyRole("ADMIN", "STAFF")
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session
