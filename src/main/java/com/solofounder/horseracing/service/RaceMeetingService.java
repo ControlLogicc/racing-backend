@@ -16,14 +16,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class RaceMeetingService {
-
-    private static final Set<String> VALID_STATUSES = Set.of("scheduled", "open", "completed", "cancelled");
 
     private final RaceMeetingRepository raceMeetingRepository;
     private final SeasonRepository seasonRepository;
@@ -95,25 +92,6 @@ public class RaceMeetingService {
         if (meetingDate.isBefore(season.getStartDate()) || meetingDate.isAfter(season.getEndDate())) {
             throw new IllegalArgumentException("Meeting date must be within season start date and end date");
         }
-    }
-
-    private String normalizeStatus(String status) {
-        String normalized = trimToNull(status);
-        if (normalized == null) {
-            return "scheduled";
-        }
-        normalized = normalized.toLowerCase();
-        if (!VALID_STATUSES.contains(normalized)) {
-            throw new IllegalArgumentException("Race meeting status must be scheduled, open, completed, or cancelled");
-        }
-        return normalized;
-    }
-
-    private String trimToNull(String value) {
-        if (value == null || value.trim().isEmpty()) {
-            return null;
-        }
-        return value.trim();
     }
 
     private RaceMeetingResponse toResponse(RaceMeeting raceMeeting) {
