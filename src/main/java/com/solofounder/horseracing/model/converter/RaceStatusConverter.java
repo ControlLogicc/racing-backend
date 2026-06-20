@@ -34,12 +34,16 @@ public class RaceStatusConverter implements AttributeConverter<RaceStatus, Strin
         String trimmed = dbData.trim().toLowerCase();
         switch (trimmed) {
             case "registration_open":
+            case "open_for_entry":
                 return RaceStatus.OPEN_FOR_ENTRY;
             case "registration_closed":
+            case "closed_for_entry":
                 return RaceStatus.CLOSED_FOR_ENTRY;
             case "provisional_result":
+            case "result_pending":
                 return RaceStatus.RESULT_PENDING;
             case "official_result":
+            case "official":
                 return RaceStatus.OFFICIAL;
             default:
                 for (RaceStatus s : RaceStatus.values()) {

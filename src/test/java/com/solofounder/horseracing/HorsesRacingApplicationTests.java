@@ -9,6 +9,9 @@ import com.solofounder.horseracing.dto.user.UserResponse;
 import com.solofounder.horseracing.dto.horse.CreateHorseRequest;
 import com.solofounder.horseracing.dto.horse.UpdateHorseRequest;
 import com.solofounder.horseracing.dto.horse.HorseResponse;
+import com.solofounder.horseracing.dto.staff.CreateStaffRequest;
+import com.solofounder.horseracing.dto.staff.StaffResponse;
+import com.solofounder.horseracing.dto.staff.UpdateStaffRequest;
 import com.solofounder.horseracing.model.*;
 import com.solofounder.horseracing.model.enums.RaceStatus;
 import com.solofounder.horseracing.model.enums.Role;
@@ -87,6 +90,9 @@ class HorsesRacingApplicationTests {
     private com.solofounder.horseracing.repository.StaffRepository staffRepository;
 
     @Autowired
+    private com.solofounder.horseracing.repository.JockeyRepository jockeyRepository;
+
+    @Autowired
     private com.solofounder.horseracing.repository.RefereeRepository refereeRepository;
 
     @Autowired
@@ -96,10 +102,12 @@ class HorsesRacingApplicationTests {
 
     @BeforeEach
     void cleanDatabase() {
-        // Clean up test horses owned by test users to prevent foreign key errors
-        userRepository.findAll().stream()
+        List<User> testEmailUsers = userRepository.findAll().stream()
                 .filter(u -> u.getEmail().endsWith("@example.com"))
-                .forEach(u -> {
+                .toList();
+
+        // Clean up test horses owned by test users to prevent foreign key errors
+        testEmailUsers.forEach(u -> {
                     List<Horse> horses = horseRepository.findByOwnerUserId(u.getUserId());
                     if (!horses.isEmpty()) {
                         horseRepository.deleteAll(horses);
@@ -107,10 +115,11 @@ class HorsesRacingApplicationTests {
                 });
         horseRepository.flush();
 
+        // Clean up test profile tables before deleting their parent users.
+        testEmailUsers.forEach(this::deleteTestProfiles);
+
         // Clean up test users
-        userRepository.findAll().stream()
-                .filter(u -> u.getEmail().endsWith("@example.com"))
-                .forEach(userRepository::delete);
+        testEmailUsers.forEach(userRepository::delete);
         userRepository.flush();
 
         if (preExistingUserIds.isEmpty()) {
@@ -118,10 +127,21 @@ class HorsesRacingApplicationTests {
                     .map(User::getUserId)
                     .forEach(preExistingUserIds::add);
         }
-        userRepository.findAll().stream()
+        List<User> newUsers = userRepository.findAll().stream()
                 .filter(u -> !preExistingUserIds.contains(u.getUserId()))
-                .forEach(userRepository::delete);
+                .toList();
+        newUsers.forEach(this::deleteTestProfiles);
+        newUsers.forEach(userRepository::delete);
         userRepository.flush();
+    }
+
+    private void deleteTestProfiles(User user) {
+        staffRepository.findByUserUserId(user.getUserId()).ifPresent(staffRepository::delete);
+        jockeyRepository.findByUserUserId(user.getUserId()).ifPresent(jockeyRepository::delete);
+        refereeRepository.findByUserUserId(user.getUserId()).ifPresent(refereeRepository::delete);
+        staffRepository.flush();
+        jockeyRepository.flush();
+        refereeRepository.flush();
     }
 
     // Helper to get JWT token by logging in default admin (or registering a user)
@@ -1033,10 +1053,244 @@ class HorsesRacingApplicationTests {
         assertEquals((short) 5, horseService.calculateHorseClass(BigDecimal.valueOf(-5)));
     }
 
+    // --- STAFF PROFILE MANAGEMENT TESTS ---
+
+    @Test
+    void testGetStaffProfileWithStaffTokenAndExistingProfile() throws Exception {
+        Staff staff = createStaff("staff.profile@example.com", "Staff Profile", "STPF01");
+        String staffToken = "Bearer " + jwtService.generateToken(staff.getUser());
+
+        MvcResult result = mockMvc.perform(get("/api/staff")
+                        .header("Authorization", staffToken))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        StaffResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), StaffResponse.class);
+        assertEquals(staff.getStaffId(), response.getStaffId());
+        assertEquals(staff.getUser().getUserId(), response.getUserId());
+        assertEquals("Staff Profile", response.getFullName());
+        assertEquals("staff.profile@example.com", response.getEmail());
+        assertEquals("STPF01", response.getStaffCode());
+        assertEquals("active", response.getStatus());
+    }
+
+    @Test
+    void testGetStaffProfileWithoutTokenFails() throws Exception {
+        mockMvc.perform(get("/api/staff"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void testGetStaffProfileWithOwnerTokenFails() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+
+        mockMvc.perform(get("/api/staff")
+                        .header("Authorization", ownerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void testGetStaffProfileWithoutProfileFails() throws Exception {
+        User staffUser = createStaffUser("staff.noprofile@example.com", "Staff No Profile");
+        String staffToken = "Bearer " + jwtService.generateToken(staffUser);
+
+        mockMvc.perform(get("/api/staff")
+                        .header("Authorization", staffToken))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void testAdminCreateStaffProfileSuccessfully() throws Exception {
+        String adminToken = getAdminToken();
+        User staffUser = createStaffUser("staff.create@example.com", "Staff Create");
+
+        CreateStaffRequest request = CreateStaffRequest.builder()
+                .userId(staffUser.getUserId())
+                .staffCode("STCR01")
+                .department("Race Management")
+                .status("active")
+                .build();
+
+        MvcResult result = mockMvc.perform(post("/api/staff")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        StaffResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), StaffResponse.class);
+        assertNotNull(response.getStaffId());
+        assertEquals(staffUser.getUserId(), response.getUserId());
+        assertEquals("Staff Create", response.getFullName());
+        assertEquals("staff.create@example.com", response.getEmail());
+        assertEquals("STCR01", response.getStaffCode());
+        assertEquals("Race Management", response.getDepartment());
+        assertEquals("active", response.getStatus());
+    }
+
+    @Test
+    void testAdminCreateStaffProfileWithOwnerUserFails() throws Exception {
+        String adminToken = getAdminToken();
+        String ownerToken = getHorseOwnerTokenWithEmail("staff.owneruser@example.com");
+        String ownerEmail = jwtService.extractUsername(ownerToken.substring("Bearer ".length()));
+        User ownerUser = userRepository.findByEmail(ownerEmail).orElseThrow();
+
+        CreateStaffRequest request = CreateStaffRequest.builder()
+                .userId(ownerUser.getUserId())
+                .staffCode("STOW01")
+                .department("Race Management")
+                .status("active")
+                .build();
+
+        mockMvc.perform(post("/api/staff")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testAdminCreateStaffProfileDuplicateUserFails() throws Exception {
+        String adminToken = getAdminToken();
+        Staff staff = createStaff("staff.duplicateuser@example.com", "Staff Duplicate User", "STDU01");
+
+        CreateStaffRequest request = CreateStaffRequest.builder()
+                .userId(staff.getUser().getUserId())
+                .staffCode("STDU02")
+                .department("Race Management")
+                .status("active")
+                .build();
+
+        mockMvc.perform(post("/api/staff")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testAdminCreateStaffProfileDuplicateStaffCodeFails() throws Exception {
+        String adminToken = getAdminToken();
+        createStaff("staff.duplicatecode.a@example.com", "Staff Duplicate Code A", "STDC01");
+        User staffUser = createStaffUser("staff.duplicatecode.b@example.com", "Staff Duplicate Code B");
+
+        CreateStaffRequest request = CreateStaffRequest.builder()
+                .userId(staffUser.getUserId())
+                .staffCode("STDC01")
+                .department("Race Management")
+                .status("active")
+                .build();
+
+        mockMvc.perform(post("/api/staff")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testOwnerCreateStaffProfileFails() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+        User staffUser = createStaffUser("staff.ownercreate@example.com", "Staff Owner Create");
+
+        CreateStaffRequest request = CreateStaffRequest.builder()
+                .userId(staffUser.getUserId())
+                .staffCode("STOC01")
+                .department("Race Management")
+                .status("active")
+                .build();
+
+        mockMvc.perform(post("/api/staff")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void testAdminUpdateStaffProfileSuccessfully() throws Exception {
+        String adminToken = getAdminToken();
+        Staff staff = createStaff("staff.update@example.com", "Staff Update", "STUP01");
+
+        UpdateStaffRequest request = UpdateStaffRequest.builder()
+                .staffCode("STUP02")
+                .department("Race Operations")
+                .status("inactive")
+                .build();
+
+        MvcResult result = mockMvc.perform(put("/api/staff/" + staff.getStaffId())
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        StaffResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), StaffResponse.class);
+        assertEquals(staff.getStaffId(), response.getStaffId());
+        assertEquals("STUP02", response.getStaffCode());
+        assertEquals("Race Operations", response.getDepartment());
+        assertEquals("inactive", response.getStatus());
+        assertEquals(staff.getUser().getUserId(), response.getUserId());
+    }
+
+    @Test
+    void testAdminUpdateStaffProfileNotFoundFails() throws Exception {
+        String adminToken = getAdminToken();
+
+        UpdateStaffRequest request = UpdateStaffRequest.builder()
+                .staffCode("STNF01")
+                .department("Race Operations")
+                .status("active")
+                .build();
+
+        mockMvc.perform(put("/api/staff/999999999")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void testAdminUpdateStaffProfileDuplicateStaffCodeFails() throws Exception {
+        String adminToken = getAdminToken();
+        Staff staffA = createStaff("staff.update.dup.a@example.com", "Staff Update Dup A", "STUA01");
+        Staff staffB = createStaff("staff.update.dup.b@example.com", "Staff Update Dup B", "STUB01");
+
+        UpdateStaffRequest request = UpdateStaffRequest.builder()
+                .staffCode(staffA.getStaffCode())
+                .department("Race Operations")
+                .status("active")
+                .build();
+
+        mockMvc.perform(put("/api/staff/" + staffB.getStaffId())
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testOwnerUpdateStaffProfileFails() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+        Staff staff = createStaff("staff.ownerupdate@example.com", "Staff Owner Update", "STOU01");
+
+        UpdateStaffRequest request = UpdateStaffRequest.builder()
+                .staffCode("STOU02")
+                .department("Race Operations")
+                .status("active")
+                .build();
+
+        mockMvc.perform(put("/api/staff/" + staff.getStaffId())
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
     // --- ADMIN RACE SETUP & LIFECYCLE TESTS ---
 
-    private Staff createStaff(String email, String fullName, String staffCode) {
-        User user = userRepository.save(User.builder()
+    private User createStaffUser(String email, String fullName) {
+        return userRepository.save(User.builder()
                 .fullName(fullName)
                 .email(email)
                 .passwordHash(passwordEncoder.encode("123456"))
@@ -1044,6 +1298,10 @@ class HorsesRacingApplicationTests {
                 .role(Role.STAFF)
                 .status(UserStatus.ACTIVE)
                 .build());
+    }
+
+    private Staff createStaff(String email, String fullName, String staffCode) {
+        User user = createStaffUser(email, fullName);
 
         return staffRepository.save(Staff.builder()
                 .user(user)
