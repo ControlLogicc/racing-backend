@@ -12,8 +12,15 @@ import com.solofounder.horseracing.dto.horse.HorseResponse;
 import com.solofounder.horseracing.dto.staff.CreateStaffRequest;
 import com.solofounder.horseracing.dto.staff.StaffResponse;
 import com.solofounder.horseracing.dto.staff.UpdateStaffRequest;
+import com.solofounder.horseracing.dto.referee.CreateRefereeRequest;
+import com.solofounder.horseracing.dto.referee.UpdateRefereeRequest;
+import com.solofounder.horseracing.dto.referee.RefereeResponse;
+import com.solofounder.horseracing.dto.registration.CreateRegistrationRequest;
+import com.solofounder.horseracing.dto.registration.RegistrationResponse;
+import com.solofounder.horseracing.model.enums.RaceRegistrationStatus;
 import com.solofounder.horseracing.model.*;
 import com.solofounder.horseracing.model.enums.RaceStatus;
+import com.solofounder.horseracing.model.enums.RefereeStatus;
 import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.model.enums.UserStatus;
 import com.solofounder.horseracing.repository.UserRepository;
@@ -94,10 +101,14 @@ class HorsesRacingApplicationTests {
         @Autowired
         private com.solofounder.horseracing.repository.RaceRepository raceRepository;
 
+        @Autowired
+        private com.solofounder.horseracing.repository.RaceRegistrationRepository raceRegistrationRepository;
+
         private static final java.util.Set<Long> preExistingUserIds = new java.util.HashSet<>();
 
         @BeforeEach
         void cleanDatabase() {
+                raceRegistrationRepository.deleteAll();
                 // Clean up test horses owned by test users to prevent foreign key errors
                 userRepository.findAll().stream()
                                 .filter(u -> u.getEmail().endsWith("@example.com"))
@@ -1096,7 +1107,7 @@ class HorsesRacingApplicationTests {
                 return refereeRepository.save(Referee.builder()
                                 .user(user)
                                 .licenseNo(licenseNo)
-                                .status("active")
+                                .status(RefereeStatus.ACTIVE)
                                 .createdAt(java.time.LocalDateTime.now())
                                 .build());
         }
@@ -1313,5 +1324,640 @@ class HorsesRacingApplicationTests {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{\"status\":\"registration_closed\"}"))
                                 .andExpect(status().isOk());
+        }
+
+        @Test
+        void testCreateRefereeProfileSuccess() throws Exception {
+                String adminToken = getAdminToken();
+                User user = userRepository.save(User.builder()
+                                .fullName("Test Referee User")
+                                .email("ref.testcreate@example.com")
+                                .passwordHash(passwordEncoder.encode("123456"))
+                                .phone("0987654321")
+                                .role(Role.REFEREE)
+                                .status(UserStatus.ACTIVE)
+                                .build());
+
+                CreateRefereeRequest request = CreateRefereeRequest.builder()
+                                .userId(user.getUserId())
+                                .licenseNo("LIC-CREATE-SUCCESS")
+                                .build();
+
+                MvcResult result = mockMvc.perform(post("/api/referees")
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                RefereeResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), RefereeResponse.class);
+                assertNotNull(response.getRefereeId());
+                assertEquals(user.getUserId(), response.getUserId());
+                assertEquals("Test Referee User", response.getFullName());
+                assertEquals("ref.testcreate@example.com", response.getEmail());
+                assertEquals("0987654321", response.getPhone());
+                assertEquals("LIC-CREATE-SUCCESS", response.getLicenseNo());
+                assertEquals("ACTIVE", response.getStatus());
+                assertNotNull(response.getCreatedAt());
+        }
+
+        @Test
+        void testCreateRefereeProfileUserRoleConstraint() throws Exception {
+                String adminToken = getAdminToken();
+                // Create user with OWNER role
+                User user = userRepository.save(User.builder()
+                                .fullName("Test Owner User")
+                                .email("owner.testcreate@example.com")
+                                .passwordHash(passwordEncoder.encode("123456"))
+                                .phone("0987654321")
+                                .role(Role.OWNER)
+                                .status(UserStatus.ACTIVE)
+                                .build());
+
+                CreateRefereeRequest request = CreateRefereeRequest.builder()
+                                .userId(user.getUserId())
+                                .licenseNo("LIC-CREATE-ROLE")
+                                .build();
+
+                mockMvc.perform(post("/api/referees")
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testCreateRefereeProfileDuplicateUserRejected() throws Exception {
+                String adminToken = getAdminToken();
+                Referee existing = createReferee("ref.dupuser@example.com", "Dup User Referee", "LIC-DUP-USER-1");
+
+                CreateRefereeRequest request = CreateRefereeRequest.builder()
+                                .userId(existing.getUser().getUserId())
+                                .licenseNo("LIC-DUP-USER-2")
+                                .build();
+
+                mockMvc.perform(post("/api/referees")
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isConflict());
+        }
+
+        @Test
+        void testCreateRefereeProfileDuplicateLicenseRejected() throws Exception {
+                String adminToken = getAdminToken();
+                createReferee("ref.duplic1@example.com", "Dup Lic 1", "LIC-DUP-LIC");
+
+                User user2 = userRepository.save(User.builder()
+                                .fullName("Dup Lic 2 User")
+                                .email("ref.duplic2@example.com")
+                                .passwordHash(passwordEncoder.encode("123456"))
+                                .phone("0987654321")
+                                .role(Role.REFEREE)
+                                .status(UserStatus.ACTIVE)
+                                .build());
+
+                CreateRefereeRequest request = CreateRefereeRequest.builder()
+                                .userId(user2.getUserId())
+                                .licenseNo("LIC-DUP-LIC")
+                                .build();
+
+                mockMvc.perform(post("/api/referees")
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isConflict());
+        }
+
+        @Test
+        void testUpdateRefereeProfileSuccess() throws Exception {
+                String adminToken = getAdminToken();
+                Referee existing = createReferee("ref.updatesuccess@example.com", "Update Success Referee", "LIC-UPDATE-OLD");
+
+                UpdateRefereeRequest request = UpdateRefereeRequest.builder()
+                                .licenseNo("LIC-UPDATE-NEW")
+                                .status("INACTIVE")
+                                .build();
+
+                MvcResult result = mockMvc.perform(put("/api/referees/" + existing.getRefereeId())
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                RefereeResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), RefereeResponse.class);
+                assertEquals(existing.getRefereeId(), response.getRefereeId());
+                assertEquals("LIC-UPDATE-NEW", response.getLicenseNo());
+                assertEquals("INACTIVE", response.getStatus());
+        }
+
+        @Test
+        void testUpdateRefereeProfileDuplicateLicenseRejected() throws Exception {
+                String adminToken = getAdminToken();
+                Referee referee1 = createReferee("ref.upddublic1@example.com", "Dup Lic Update 1", "LIC-DUP-LIC-UPD1");
+                Referee referee2 = createReferee("ref.upddublic2@example.com", "Dup Lic Update 2", "LIC-DUP-LIC-UPD2");
+
+                UpdateRefereeRequest request = UpdateRefereeRequest.builder()
+                                .licenseNo("LIC-DUP-LIC-UPD1")
+                                .status("ACTIVE")
+                                .build();
+
+                mockMvc.perform(put("/api/referees/" + referee2.getRefereeId())
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isConflict());
+        }
+
+        @Test
+        void testGetRefereesListPermissions() throws Exception {
+                createReferee("ref.permissions@example.com", "Perms Referee", "LIC-PERMISSIONS");
+
+                // 1. ADMIN can view list
+                String adminToken = getAdminToken();
+                MvcResult adminResult = mockMvc.perform(get("/api/referees")
+                                .header("Authorization", adminToken))
+                                .andExpect(status().isOk())
+                                .andReturn();
+                String adminBody = adminResult.getResponse().getContentAsString();
+                assertTrue(adminBody.contains("LIC-PERMISSIONS"));
+                assertFalse(adminBody.contains("passwordHash"));
+
+                // 2. STAFF can view list
+                String staffToken = getStaffToken();
+                MvcResult staffResult = mockMvc.perform(get("/api/referees")
+                                .header("Authorization", staffToken))
+                                .andExpect(status().isOk())
+                                .andReturn();
+                String staffBody = staffResult.getResponse().getContentAsString();
+                assertTrue(staffBody.contains("LIC-PERMISSIONS"));
+
+                // 3. OWNER gets 403 Forbidden
+                String ownerToken = getHorseOwnerToken();
+                mockMvc.perform(get("/api/referees")
+                                .header("Authorization", ownerToken))
+                                .andExpect(status().isForbidden());
+
+                // 4. No token gets 401 Unauthorized
+                mockMvc.perform(get("/api/referees"))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void testUpdateRefereeDoesNotChangeUserId() throws Exception {
+                String adminToken = getAdminToken();
+                Referee existing = createReferee("ref.updateuserid@example.com", "No Change UserID Referee", "LIC-NO-CHANGE");
+                Long originalUserId = existing.getUser().getUserId();
+
+                UpdateRefereeRequest request = UpdateRefereeRequest.builder()
+                                .licenseNo("LIC-NO-CHANGE-UPDATED")
+                                .status("ACTIVE")
+                                .build();
+
+                MvcResult result = mockMvc.perform(put("/api/referees/" + existing.getRefereeId())
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                RefereeResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), RefereeResponse.class);
+                assertEquals(existing.getRefereeId(), response.getRefereeId());
+                assertEquals(originalUserId, response.getUserId());
+                assertEquals("LIC-NO-CHANGE-UPDATED", response.getLicenseNo());
+        }
+
+        private String getStaffToken() throws Exception {
+                User staffUser = userRepository.save(User.builder()
+                                .fullName("Staff User")
+                                .email("staff.test@example.com")
+                                .passwordHash(passwordEncoder.encode("123456"))
+                                .phone("0987654321")
+                                .role(Role.STAFF)
+                                .status(UserStatus.ACTIVE)
+                                .build());
+                return "Bearer " + jwtService.generateToken(staffUser);
+        }
+
+        @Test
+        void testOwnerSubmitRegistrationSuccess() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staff = createStaff("reg.staff@example.com", "Reg Staff", "RGSF01");
+                Referee referee = createReferee("reg.ref@example.com", "Reg Referee", "RGRF01");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+
+                User owner = createOwnerUser("reg.owner@example.com", "Reg Owner");
+                String ownerToken = getTokenFor(owner);
+                Horse horse = createHorseForOwner(owner, "Thunder", "active");
+
+                CreateRegistrationRequest request = CreateRegistrationRequest.builder()
+                                .raceId(race.getRaceId())
+                                .horseId(horse.getHorseId())
+                                .build();
+
+                MvcResult result = mockMvc.perform(post("/api/registrations")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated())
+                                .andReturn();
+
+                RegistrationResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), RegistrationResponse.class);
+                assertNotNull(response.getRegistrationId());
+                assertEquals(race.getRaceId(), response.getRaceId());
+                assertEquals(horse.getHorseId(), response.getHorseId());
+                assertEquals(owner.getUserId(), response.getOwnerId());
+                assertEquals("PENDING", response.getStatus());
+        }
+
+        @Test
+        void testOwnerSubmitDuplicateRegistrationConflict() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staff = createStaff("reg.dup.staff@example.com", "Reg Staff", "RGSF02");
+                Referee referee = createReferee("reg.dup.ref@example.com", "Reg Referee", "RGRF02");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+
+                User owner = createOwnerUser("reg.dup.owner@example.com", "Reg Owner");
+                String ownerToken = getTokenFor(owner);
+                Horse horse = createHorseForOwner(owner, "Thunder", "active");
+
+                CreateRegistrationRequest request = CreateRegistrationRequest.builder()
+                                .raceId(race.getRaceId())
+                                .horseId(horse.getHorseId())
+                                .build();
+
+                // First registration
+                mockMvc.perform(post("/api/registrations")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated());
+
+                // Second registration (duplicate)
+                mockMvc.perform(post("/api/registrations")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isConflict());
+        }
+
+        @Test
+        void testOwnerSubmitAnotherOwnerHorseNotFound() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staff = createStaff("reg.other.staff@example.com", "Reg Staff", "RGSF03");
+                Referee referee = createReferee("reg.other.ref@example.com", "Reg Referee", "RGRF03");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+
+                User ownerA = createOwnerUser("reg.ownerA@example.com", "Owner A");
+                User ownerB = createOwnerUser("reg.ownerB@example.com", "Owner B");
+                String ownerBToken = getTokenFor(ownerB);
+
+                Horse horse = createHorseForOwner(ownerA, "Thunder", "active");
+
+                CreateRegistrationRequest request = CreateRegistrationRequest.builder()
+                                .raceId(race.getRaceId())
+                                .horseId(horse.getHorseId())
+                                .build();
+
+                // Owner B tries to register Owner A's horse
+                mockMvc.perform(post("/api/registrations")
+                                .header("Authorization", ownerBToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void testOwnerSubmitRegistrationRaceNotOpen() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staff = createStaff("reg.notopen.staff@example.com", "Reg Staff", "RGSF04");
+                Referee referee = createReferee("reg.notopen.ref@example.com", "Reg Referee", "RGRF04");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+
+                User owner = createOwnerUser("reg.notopen.owner@example.com", "Reg Owner");
+                String ownerToken = getTokenFor(owner);
+                Horse horse = createHorseForOwner(owner, "Thunder", "active");
+
+                CreateRegistrationRequest request = CreateRegistrationRequest.builder()
+                                .raceId(race.getRaceId())
+                                .horseId(horse.getHorseId())
+                                .build();
+
+                mockMvc.perform(post("/api/registrations")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testOwnerSubmitRegistrationInvalidTimeWindow() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staff = createStaff("reg.time.staff@example.com", "Reg Staff", "RGSF05");
+                Referee referee = createReferee("reg.time.ref@example.com", "Reg Referee", "RGRF05");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(5), now.minusHours(1), now.plusHours(5));
+
+                User owner = createOwnerUser("reg.time.owner@example.com", "Reg Owner");
+                String ownerToken = getTokenFor(owner);
+                Horse horse = createHorseForOwner(owner, "Thunder", "active");
+
+                CreateRegistrationRequest request = CreateRegistrationRequest.builder()
+                                .raceId(race.getRaceId())
+                                .horseId(horse.getHorseId())
+                                .build();
+
+                mockMvc.perform(post("/api/registrations")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testStaffViewRegistrationsSuccess() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staff = createStaff("reg.view.staff@example.com", "Reg Staff", "RGSF06");
+                Referee referee = createReferee("reg.view.ref@example.com", "Reg Referee", "RGRF06");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+
+                User owner = createOwnerUser("reg.view.owner@example.com", "Reg Owner");
+                String ownerToken = getTokenFor(owner);
+                Horse horse = createHorseForOwner(owner, "Thunder", "active");
+
+                CreateRegistrationRequest request = CreateRegistrationRequest.builder()
+                                .raceId(race.getRaceId())
+                                .horseId(horse.getHorseId())
+                                .build();
+                mockMvc.perform(post("/api/registrations")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated());
+
+                String staffToken = getTokenFor(staff.getUser());
+                MvcResult result = mockMvc.perform(get("/api/registrations/" + race.getRaceId())
+                                .header("Authorization", staffToken))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                String body = result.getResponse().getContentAsString();
+                assertTrue(body.contains("Thunder"));
+                assertFalse(body.contains("passwordHash"));
+        }
+
+        @Test
+        void testStaffViewRegistrationsUnassignedForbidden() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staffA = createStaff("reg.viewA.staff@example.com", "Reg Staff A", "RGSF07");
+                Staff staffB = createStaff("reg.viewB.staff@example.com", "Reg Staff B", "RGSF08");
+                Referee referee = createReferee("reg.view.refB@example.com", "Reg Referee", "RGRF08");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staffA, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+
+                String staffBToken = getTokenFor(staffB.getUser());
+                mockMvc.perform(get("/api/registrations/" + race.getRaceId())
+                                .header("Authorization", staffBToken))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void testStaffApproveRegistrationSuccess() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staff = createStaff("reg.app.staff@example.com", "Reg Staff", "RGSF09");
+                Referee referee = createReferee("reg.app.ref@example.com", "Reg Referee", "RGRF09");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+
+                User owner = createOwnerUser("reg.app.owner@example.com", "Reg Owner");
+                String ownerToken = getTokenFor(owner);
+                Horse horse = createHorseForOwner(owner, "Thunder", "active");
+
+                CreateRegistrationRequest request = CreateRegistrationRequest.builder()
+                                .raceId(race.getRaceId())
+                                .horseId(horse.getHorseId())
+                                .build();
+                MvcResult submitResult = mockMvc.perform(post("/api/registrations")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated())
+                                .andReturn();
+
+                RegistrationResponse regResponse = objectMapper.readValue(submitResult.getResponse().getContentAsString(), RegistrationResponse.class);
+
+                String staffToken = getTokenFor(staff.getUser());
+                MvcResult appResult = mockMvc.perform(put("/api/registrations/" + regResponse.getRegistrationId() + "/approve")
+                                .header("Authorization", staffToken))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                RegistrationResponse appResponse = objectMapper.readValue(appResult.getResponse().getContentAsString(), RegistrationResponse.class);
+                assertEquals("APPROVED", appResponse.getStatus());
+        }
+
+        @Test
+        void testStaffRejectRegistrationSuccess() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staff = createStaff("reg.rej.staff@example.com", "Reg Staff", "RGSF10");
+                Referee referee = createReferee("reg.rej.ref@example.com", "Reg Referee", "RGRF10");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+
+                User owner = createOwnerUser("reg.rej.owner@example.com", "Reg Owner");
+                String ownerToken = getTokenFor(owner);
+                Horse horse = createHorseForOwner(owner, "Thunder", "active");
+
+                CreateRegistrationRequest request = CreateRegistrationRequest.builder()
+                                .raceId(race.getRaceId())
+                                .horseId(horse.getHorseId())
+                                .build();
+                MvcResult submitResult = mockMvc.perform(post("/api/registrations")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated())
+                                .andReturn();
+
+                RegistrationResponse regResponse = objectMapper.readValue(submitResult.getResponse().getContentAsString(), RegistrationResponse.class);
+
+                String staffToken = getTokenFor(staff.getUser());
+                MvcResult rejResult = mockMvc.perform(put("/api/registrations/" + regResponse.getRegistrationId() + "/reject")
+                                .header("Authorization", staffToken))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                RegistrationResponse rejResponse = objectMapper.readValue(rejResult.getResponse().getContentAsString(), RegistrationResponse.class);
+                assertEquals("REJECTED", rejResponse.getStatus());
+        }
+
+        @Test
+        void testApproveOrRejectInvalidTransitions() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staff = createStaff("reg.trans.staff@example.com", "Reg Staff", "RGSF11");
+                Referee referee = createReferee("reg.trans.ref@example.com", "Reg Referee", "RGRF11");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+
+                User owner = createOwnerUser("reg.trans.owner@example.com", "Reg Owner");
+                String ownerToken = getTokenFor(owner);
+                Horse horse = createHorseForOwner(owner, "Thunder", "active");
+
+                CreateRegistrationRequest request = CreateRegistrationRequest.builder()
+                                .raceId(race.getRaceId())
+                                .horseId(horse.getHorseId())
+                                .build();
+                MvcResult submitResult = mockMvc.perform(post("/api/registrations")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated())
+                                .andReturn();
+
+                RegistrationResponse regResponse = objectMapper.readValue(submitResult.getResponse().getContentAsString(), RegistrationResponse.class);
+
+                String staffToken = getTokenFor(staff.getUser());
+                mockMvc.perform(put("/api/registrations/" + regResponse.getRegistrationId() + "/approve")
+                                .header("Authorization", staffToken))
+                                .andExpect(status().isOk());
+
+                mockMvc.perform(put("/api/registrations/" + regResponse.getRegistrationId() + "/approve")
+                                .header("Authorization", staffToken))
+                                .andExpect(status().isBadRequest());
+
+                mockMvc.perform(put("/api/registrations/" + regResponse.getRegistrationId() + "/reject")
+                                .header("Authorization", staffToken))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testOwnerCannotApproveOrReject() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staff = createStaff("reg.ownerperms.staff@example.com", "Reg Staff", "RGSF12");
+                Referee referee = createReferee("reg.ownerperms.ref@example.com", "Reg Referee", "RGRF12");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+
+                User owner = createOwnerUser("reg.ownerperms.owner@example.com", "Reg Owner");
+                String ownerToken = getTokenFor(owner);
+                Horse horse = createHorseForOwner(owner, "Thunder", "active");
+
+                CreateRegistrationRequest request = CreateRegistrationRequest.builder()
+                                .raceId(race.getRaceId())
+                                .horseId(horse.getHorseId())
+                                .build();
+                MvcResult submitResult = mockMvc.perform(post("/api/registrations")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated())
+                                .andReturn();
+
+                RegistrationResponse regResponse = objectMapper.readValue(submitResult.getResponse().getContentAsString(), RegistrationResponse.class);
+
+                mockMvc.perform(put("/api/registrations/" + regResponse.getRegistrationId() + "/approve")
+                                .header("Authorization", ownerToken))
+                                .andExpect(status().isForbidden());
+
+                mockMvc.perform(put("/api/registrations/" + regResponse.getRegistrationId() + "/reject")
+                                .header("Authorization", ownerToken))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void testNoTokenReturnsUnauthorized() throws Exception {
+                mockMvc.perform(post("/api/registrations")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"))
+                                .andExpect(status().isUnauthorized());
+
+                mockMvc.perform(get("/api/registrations/1"))
+                                .andExpect(status().isUnauthorized());
+
+                mockMvc.perform(put("/api/registrations/1/approve"))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void testApprovedRegistrationDoesNotCreateRaceEntry() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staff = createStaff("reg.entrycheck.staff@example.com", "Reg Staff", "RGSF13");
+                Referee referee = createReferee("reg.entrycheck.ref@example.com", "Reg Referee", "RGRF13");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+
+                User owner = createOwnerUser("reg.entrycheck.owner@example.com", "Reg Owner");
+                String ownerToken = getTokenFor(owner);
+                Horse horse = createHorseForOwner(owner, "Thunder", "active");
+
+                CreateRegistrationRequest request = CreateRegistrationRequest.builder()
+                                .raceId(race.getRaceId())
+                                .horseId(horse.getHorseId())
+                                .build();
+                MvcResult submitResult = mockMvc.perform(post("/api/registrations")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated())
+                                .andReturn();
+
+                RegistrationResponse regResponse = objectMapper.readValue(submitResult.getResponse().getContentAsString(), RegistrationResponse.class);
+
+                String staffToken = getTokenFor(staff.getUser());
+                mockMvc.perform(put("/api/registrations/" + regResponse.getRegistrationId() + "/approve")
+                                .header("Authorization", staffToken))
+                                .andExpect(status().isOk());
+
+                long entryCount = jdbcTemplate.queryForObject(
+                                "SELECT COUNT(*) FROM dbo.race_entry WHERE horse_id = ?",
+                                Long.class,
+                                horse.getHorseId());
+                assertEquals(0L, entryCount);
+        }
+
+        private User createOwnerUser(String email, String fullName) {
+                return userRepository.save(User.builder()
+                                .fullName(fullName)
+                                .email(email)
+                                .passwordHash(passwordEncoder.encode("123456"))
+                                .phone("0987654321")
+                                .role(Role.OWNER)
+                                .status(UserStatus.ACTIVE)
+                                .build());
+        }
+
+        private Horse createHorseForOwner(User owner, String name, String status) {
+                return horseRepository.save(Horse.builder()
+                                .owner(owner)
+                                .horseName(name)
+                                .color("Brown")
+                                .age((short) 4)
+                                .gender("M")
+                                .currentScore(BigDecimal.ZERO)
+                                .horseClass((short) 5)
+                                .status(status)
+                                .build());
+        }
+
+        private String getTokenFor(User user) {
+                return "Bearer " + jwtService.generateToken(user);
         }
 }

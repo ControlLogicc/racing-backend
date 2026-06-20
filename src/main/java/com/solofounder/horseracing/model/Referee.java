@@ -1,5 +1,7 @@
 package com.solofounder.horseracing.model;
 
+import com.solofounder.horseracing.model.converter.RefereeStatusConverter;
+import com.solofounder.horseracing.model.enums.RefereeStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -25,8 +27,9 @@ public class Referee {
     @Column(name = "license_no", nullable = false, unique = true, length = 40)
     private String licenseNo;
 
+    @Convert(converter = RefereeStatusConverter.class)
     @Column(name = "status", nullable = false, length = 20)
-    private String status;
+    private RefereeStatus status;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

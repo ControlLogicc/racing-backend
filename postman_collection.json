@@ -1118,6 +1118,881 @@
         "description": "Expected 200 OK. Changes status from OPEN_FOR_ENTRY to CLOSED_FOR_ENTRY."
       },
       "response": []
+    },
+    {
+      "name": "21. Auth login STAFF",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"staff@gmail.com\",\n  \"password\": \"123456\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Expected 200. Copy token to staffToken."
+      },
+      "response": []
+    },
+    {
+      "name": "22. ADMIN create internal User (role REFEREE)",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Referee Test\",\n  \"email\": \"referee@gmail.com\",\n  \"password\": \"password123\",\n  \"phone\": \"0987654321\",\n  \"role\": \"REFEREE\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/admin/users",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "users"
+          ]
+        },
+        "description": "Expected 200. Copy userId to refereeUserId."
+      },
+      "response": []
+    },
+    {
+      "name": "23. ADMIN create referee profile",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": {{refereeUserId}},\n  \"licenseNo\": \"LIC-REF-001\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/referees",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "referees"
+          ]
+        },
+        "description": "Expected 200. Copy refereeId."
+      },
+      "response": []
+    },
+    {
+      "name": "24. ADMIN get referee list",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/referees",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "referees"
+          ]
+        },
+        "description": "Expected 200. Returns list of referee profiles."
+      },
+      "response": []
+    },
+    {
+      "name": "25. STAFF get referee list",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/referees",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "referees"
+          ]
+        },
+        "description": "Expected 200. Returns list of referee profiles."
+      },
+      "response": []
+    },
+    {
+      "name": "26. ADMIN update referee profile",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"licenseNo\": \"LIC-REF-001-NEW\",\n  \"status\": \"INACTIVE\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/referees/{{refereeId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "referees",
+            "{{refereeId}}"
+          ]
+        },
+        "description": "Expected 200. Updates licenseNo and status."
+      },
+      "response": []
+    },
+    {
+      "name": "27. ADMIN create referee profile with non-referee role user",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": {{jockeyUserId}},\n  \"licenseNo\": \"LIC-REF-BAD-ROLE\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/referees",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "referees"
+          ]
+        },
+        "description": "Expected 400. Checks role constraint."
+      },
+      "response": []
+    },
+    {
+      "name": "28. ADMIN create second profile for same referee user",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": {{refereeUserId}},\n  \"licenseNo\": \"LIC-REF-DUP\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/referees",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "referees"
+          ]
+        },
+        "description": "Expected 409 Conflict."
+      },
+      "response": []
+    },
+    {
+      "name": "29. ADMIN create referee profile with duplicate license",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": {{refereeUserId}},\n  \"licenseNo\": \"LIC-REF-001-NEW\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/referees",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "referees"
+          ]
+        },
+        "description": "Expected 409 Conflict."
+      },
+      "response": []
+    },
+    {
+      "name": "30. OWNER get referee list",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/referees",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "referees"
+          ]
+        },
+        "description": "Expected 403 Forbidden."
+      },
+      "response": []
+    },
+    {
+      "name": "31. STAFF create referee profile",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": {{refereeUserId}},\n  \"licenseNo\": \"LIC-REF-STAFF\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/referees",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "referees"
+          ]
+        },
+        "description": "Expected 403 Forbidden."
+      },
+      "response": []
+    },
+    {
+      "name": "32. STAFF update referee profile",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"licenseNo\": \"LIC-REF-001-NEW\",\n  \"status\": \"ACTIVE\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/referees/{{refereeId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "referees",
+            "{{refereeId}}"
+          ]
+        },
+        "description": "Expected 403 Forbidden."
+      },
+      "response": []
+    },
+    {
+      "name": "33. No token get referee list",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/referees",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "referees"
+          ]
+        },
+        "description": "Expected 401 Unauthorized."
+      },
+      "response": []
+    },
+    {
+      "name": "34. No token create referee profile",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/referees",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "referees"
+          ]
+        },
+        "description": "Expected 401 Unauthorized."
+      },
+      "response": []
+    },
+    {
+      "name": "35. No token update referee profile",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/referees/{{refereeId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "referees",
+            "{{refereeId}}"
+          ]
+        },
+        "description": "Expected 401 Unauthorized."
+      },
+      "response": []
+    },
+    {
+      "name": "36. Auth login STAFF B",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"staffb@gmail.com\",\n  \"password\": \"123456\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Expected 200. Copy token to staffBToken."
+      },
+      "response": []
+    },
+    {
+      "name": "37. OWNER A creates owned Horse",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"horseName\": \"Thunder A\",\n  \"color\": \"Brown\",\n  \"age\": 4,\n  \"gender\": \"M\",\n  \"healthNote\": \"Healthy\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/owner/horses",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "owner",
+            "horses"
+          ]
+        },
+        "description": "Expected 200. Save horseId."
+      },
+      "response": []
+    },
+    {
+      "name": "38. OWNER A submits Registration",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"raceId\": {{raceId}},\n  \"horseId\": {{horseId}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/registrations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "registrations"
+          ]
+        },
+        "description": "Expected 201. Save registrationId."
+      },
+      "response": []
+    },
+    {
+      "name": "39. STAFF A gets Race registrations",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/registrations/{{raceId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "registrations",
+            "{{raceId}}"
+          ]
+        },
+        "description": "Expected 200. Returns list."
+      },
+      "response": []
+    },
+    {
+      "name": "40. STAFF A approves Registration",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/registrations/{{registrationId}}/approve",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "registrations",
+            "{{registrationId}}",
+            "approve"
+          ]
+        },
+        "description": "Expected 200. Status should be APPROVED."
+      },
+      "response": []
+    },
+    {
+      "name": "41. OWNER B registers OWNER A's Horse (404)",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerBToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"raceId\": {{raceId}},\n  \"horseId\": {{horseId}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/registrations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "registrations"
+          ]
+        },
+        "description": "Expected 404. Horse belongs to another owner."
+      },
+      "response": []
+    },
+    {
+      "name": "42. Register the same Horse twice (409)",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"raceId\": {{raceId}},\n  \"horseId\": {{horseId}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/registrations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "registrations"
+          ]
+        },
+        "description": "Expected 409. Duplicate registration."
+      },
+      "response": []
+    },
+    {
+      "name": "43. STAFF B views STAFF A's Race registrations (403)",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffBToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/registrations/{{raceId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "registrations",
+            "{{raceId}}"
+          ]
+        },
+        "description": "Expected 403. Assigned staff only."
+      },
+      "response": []
+    },
+    {
+      "name": "44. STAFF B approves STAFF A's Race registration (403)",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffBToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/registrations/{{registrationId}}/approve",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "registrations",
+            "{{registrationId}}",
+            "approve"
+          ]
+        },
+        "description": "Expected 403. Staff B is not assigned to the race."
+      },
+      "response": []
+    },
+    {
+      "name": "45. OWNER calls approve endpoint (403)",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/registrations/{{registrationId}}/approve",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "registrations",
+            "{{registrationId}}",
+            "approve"
+          ]
+        },
+        "description": "Expected 403. Owner cannot approve."
+      },
+      "response": []
+    },
+    {
+      "name": "46. Approve an already APPROVED registration (400)",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/registrations/{{registrationId}}/approve",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "registrations",
+            "{{registrationId}}",
+            "approve"
+          ]
+        },
+        "description": "Expected 400. Status must be PENDING."
+      },
+      "response": []
+    },
+    {
+      "name": "47. No-token cases (401)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"raceId\": {{raceId}},\n  \"horseId\": {{horseId}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/registrations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "registrations"
+          ]
+        },
+        "description": "Expected 401 Unauthorized."
+      },
+      "response": []
     }
   ],
   "variable": [
@@ -1139,6 +2014,14 @@
     },
     {
       "key": "jockeyToken",
+      "value": ""
+    },
+    {
+      "key": "staffToken",
+      "value": ""
+    },
+    {
+      "key": "staffBToken",
       "value": ""
     },
     {
@@ -1170,6 +2053,10 @@
       "value": ""
     },
     {
+      "key": "refereeUserId",
+      "value": ""
+    },
+    {
       "key": "raceConditionId",
       "value": ""
     },
@@ -1188,6 +2075,14 @@
     {
       "key": "refereeId",
       "value": "null"
+    },
+    {
+      "key": "registrationId",
+      "value": ""
+    },
+    {
+      "key": "secondRegistrationId",
+      "value": ""
     }
   ]
-}
+}
