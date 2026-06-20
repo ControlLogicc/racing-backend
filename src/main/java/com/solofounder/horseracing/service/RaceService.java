@@ -16,27 +16,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class RaceService {
-
-    private static final String OPEN_STATUS = "registration_open";
-    private static final Set<String> VALID_STATUSES = Set.of(
-            "draft",
-            "scheduled",
-            "registration_open",
-            "registration_closed",
-            "entries_finalized",
-            "racecard_published",
-            "running",
-            "provisional_result",
-            "under_review",
-            "official_result",
-            "closed",
-            "cancelled");
 
     private final RaceRepository raceRepository;
     private final RaceMeetingRepository raceMeetingRepository;
@@ -135,7 +119,7 @@ public class RaceService {
 
         if (request.getStatus() != null) {
             try {
-                race.setStatus(RaceStatus.valueOf(request.getStatus().toUpperCase()));
+                race.setStatus(parseRaceStatus(request.getStatus()));
             } catch (Exception e) {
                 throw new IllegalArgumentException("Race status is invalid");
             }
@@ -161,7 +145,7 @@ public class RaceService {
         Race race = findRace(raceId);
         RaceStatus newStatus;
         try {
-            newStatus = RaceStatus.valueOf(newStatusStr.toUpperCase());
+            newStatus = parseRaceStatus(newStatusStr);
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid race status value");
         }
@@ -283,18 +267,6 @@ public class RaceService {
         return raceNo;
     }
 
-    private String normalizeStatus(String status) {
-        String normalized = trimToNull(status);
-        if (normalized == null) {
-            return "draft";
-        }
-        normalized = normalized.toLowerCase();
-        if (!VALID_STATUSES.contains(normalized)) {
-            throw new IllegalArgumentException("Race status is invalid");
-        }
-        return normalized;
-    }
-
     private String normalizeRequired(String value, String message) {
         String normalized = trimToNull(value);
         if (normalized == null) {
@@ -308,6 +280,34 @@ public class RaceService {
             return null;
         }
         return value.trim();
+    }
+
+    private RaceStatus parseRaceStatus(String statusStr) {
+        if (statusStr == null || statusStr.trim().isEmpty()) {
+            return null;
+        }
+        String normalized = statusStr.trim().toLowerCase();
+        switch (normalized) {
+            case "registration_open":
+            case "open_for_entry":
+                return RaceStatus.OPEN_FOR_ENTRY;
+            case "registration_closed":
+            case "closed_for_entry":
+                return RaceStatus.CLOSED_FOR_ENTRY;
+            case "provisional_result":
+            case "result_pending":
+                return RaceStatus.RESULT_PENDING;
+            case "official_result":
+            case "official":
+                return RaceStatus.OFFICIAL;
+            default:
+                for (RaceStatus status : RaceStatus.values()) {
+                    if (status.name().equalsIgnoreCase(normalized)) {
+                        return status;
+                    }
+                }
+                throw new IllegalArgumentException("Race status is invalid");
+        }
     }
 
     private RaceResponse toResponse(Race race) {
