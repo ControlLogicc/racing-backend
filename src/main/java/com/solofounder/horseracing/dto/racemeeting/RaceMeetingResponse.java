@@ -11,11 +11,11 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class RaceMeetingResponse {
     private Long meetingId;
+    private String meetingName;
     private Long seasonId;
     private String seasonName;
     private Long racecourseId;
     private String racecourseName;
     private LocalDate meetingDate;
-    private String status;
     private LocalDateTime createdAt;
 }

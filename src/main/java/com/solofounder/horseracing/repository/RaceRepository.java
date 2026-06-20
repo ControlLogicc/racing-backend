@@ -8,9 +8,11 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
+import com.solofounder.horseracing.model.enums.RaceStatus;
+
 @Repository
 public interface RaceRepository extends JpaRepository<Race, Long> {
-    List<Race> findByStatus(String status);
+    List<Race> findByStatus(RaceStatus status);
 
     @Query(value = "SELECT COUNT(*) FROM dbo.race_registration WHERE race_id = :raceId", nativeQuery = true)
     long countRaceRegistrations(@Param("raceId") Long raceId);

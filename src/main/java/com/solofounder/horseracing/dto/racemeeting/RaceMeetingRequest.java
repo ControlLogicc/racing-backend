@@ -1,5 +1,6 @@
 package com.solofounder.horseracing.dto.racemeeting;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
@@ -11,6 +12,9 @@ import java.time.LocalDate;
 @AllArgsConstructor
 public class RaceMeetingRequest {
 
+    @NotBlank(message = "Meeting name is required")
+    private String meetingName;
+
     @NotNull(message = "Season id is required")
     private Long seasonId;
 
@@ -19,6 +23,4 @@ public class RaceMeetingRequest {
 
     @NotNull(message = "Meeting date is required")
     private LocalDate meetingDate;
-
-    private String status;
 }

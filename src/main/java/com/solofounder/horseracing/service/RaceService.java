@@ -11,6 +11,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.solofounder.horseracing.model.enums.RaceStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -32,14 +36,14 @@ public class RaceService {
             "under_review",
             "official_result",
             "closed",
-            "cancelled"
-    );
+            "cancelled");
 
     private final RaceRepository raceRepository;
     private final RaceMeetingRepository raceMeetingRepository;
     private final RaceConditionRepository raceConditionRepository;
     private final StaffRepository staffRepository;
     private final RefereeRepository refereeRepository;
+    private final UserRepository userRepository;
 
     public List<RaceResponse> getAllRaces() {
         return raceRepository.findAll().stream()
@@ -48,7 +52,10 @@ public class RaceService {
     }
 
     public List<RaceResponse> getOpenRaces() {
-        return raceRepository.findByStatus(OPEN_STATUS).stream()
+        LocalDateTime now = LocalDateTime.now();
+        return raceRepository.findByStatus(RaceStatus.OPEN_FOR_ENTRY).stream()
+                .filter(r -> r.getRegistrationOpenAt() != null && !r.getRegistrationOpenAt().isAfter(now))
+                .filter(r -> r.getRegistrationCloseAt() != null && !r.getRegistrationCloseAt().isBefore(now))
                 .map(this::toResponse)
                 .toList();
     }
@@ -62,6 +69,24 @@ public class RaceService {
         RaceCondition raceCondition = findRaceCondition(request.getConditionId());
         Staff staff = findStaffIfProvided(request.getStaffId());
         Referee referee = findRefereeIfProvided(request.getRefereeId());
+
+        if (request.getScheduledTime() == null) {
+            throw new IllegalArgumentException("Scheduled time is required");
+        }
+        if (!request.getScheduledTime().toLocalDate().equals(raceMeeting.getMeetingDate())) {
+            throw new IllegalArgumentException("Race scheduled date must match meeting date");
+        }
+
+        if (request.getRegistrationOpenAt() == null || request.getRegistrationCloseAt() == null) {
+            throw new IllegalArgumentException("Registration open and close times are required");
+        }
+        if (!request.getRegistrationOpenAt().isBefore(request.getRegistrationCloseAt())) {
+            throw new IllegalArgumentException("Registration open time must be before registration close time");
+        }
+        if (!request.getRegistrationCloseAt().isBefore(request.getScheduledTime())) {
+            throw new IllegalArgumentException("Registration close time must be before race scheduled time");
+        }
+
         Race race = Race.builder()
                 .raceMeeting(raceMeeting)
                 .raceCondition(raceCondition)
@@ -70,22 +95,136 @@ public class RaceService {
                 .raceName(normalizeRequired(request.getRaceName(), "Race name is required"))
                 .raceNo(validateRaceNo(request.getRaceNo()))
                 .scheduledTime(request.getScheduledTime())
-                .status(normalizeStatus(request.getStatus()))
+                .registrationOpenAt(request.getRegistrationOpenAt())
+                .registrationCloseAt(request.getRegistrationCloseAt())
+                .status(RaceStatus.DRAFT) // Default to DRAFT
                 .build();
         return toResponse(raceRepository.save(race));
     }
 
     public RaceResponse updateRace(Long raceId, RaceRequest request) {
         Race race = findRace(raceId);
-        race.setRaceMeeting(findRaceMeeting(request.getMeetingId()));
+        RaceMeeting raceMeeting = findRaceMeeting(request.getMeetingId());
+
+        if (request.getScheduledTime() == null) {
+            throw new IllegalArgumentException("Scheduled time is required");
+        }
+        if (!request.getScheduledTime().toLocalDate().equals(raceMeeting.getMeetingDate())) {
+            throw new IllegalArgumentException("Race scheduled date must match meeting date");
+        }
+
+        if (request.getRegistrationOpenAt() == null || request.getRegistrationCloseAt() == null) {
+            throw new IllegalArgumentException("Registration open and close times are required");
+        }
+        if (!request.getRegistrationOpenAt().isBefore(request.getRegistrationCloseAt())) {
+            throw new IllegalArgumentException("Registration open time must be before registration close time");
+        }
+        if (!request.getRegistrationCloseAt().isBefore(request.getScheduledTime())) {
+            throw new IllegalArgumentException("Registration close time must be before race scheduled time");
+        }
+
+        race.setRaceMeeting(raceMeeting);
         race.setRaceCondition(findRaceCondition(request.getConditionId()));
         race.setStaff(findStaffIfProvided(request.getStaffId()));
         race.setReferee(findRefereeIfProvided(request.getRefereeId()));
         race.setRaceName(normalizeRequired(request.getRaceName(), "Race name is required"));
         race.setRaceNo(validateRaceNo(request.getRaceNo()));
         race.setScheduledTime(request.getScheduledTime());
-        race.setStatus(normalizeStatus(request.getStatus()));
+        race.setRegistrationOpenAt(request.getRegistrationOpenAt());
+        race.setRegistrationCloseAt(request.getRegistrationCloseAt());
+
+        if (request.getStatus() != null) {
+            try {
+                race.setStatus(RaceStatus.valueOf(request.getStatus().toUpperCase()));
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Race status is invalid");
+            }
+        }
         return toResponse(raceRepository.save(race));
+    }
+
+    public RaceResponse assignStaff(Long raceId, Long staffId) {
+        Race race = findRace(raceId);
+        if (staffId == null) {
+            throw new IllegalArgumentException("Staff id is required");
+        }
+        Staff staff = staffRepository.findById(staffId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
+        if (staff.getUser().getRole() != Role.STAFF) {
+            throw new IllegalArgumentException("Staff profile must belong to user role STAFF");
+        }
+        race.setStaff(staff);
+        return toResponse(raceRepository.save(race));
+    }
+
+    public RaceResponse updateRaceStatus(Long raceId, String newStatusStr) {
+        Race race = findRace(raceId);
+        RaceStatus newStatus;
+        try {
+            newStatus = RaceStatus.valueOf(newStatusStr.toUpperCase());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid race status value");
+        }
+
+        // Authorization & Ownership check
+        User user = getCurrentUser();
+        if (user.getRole() == Role.STAFF) {
+            Staff staff = staffRepository.findByUserUserId(user.getUserId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden"));
+            if (race.getStaff() == null || !race.getStaff().getStaffId().equals(staff.getStaffId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+            }
+        } else if (user.getRole() != Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+
+        RaceStatus oldStatus = race.getStatus();
+        if (oldStatus == newStatus) {
+            return toResponse(race);
+        }
+
+        // Allowed transitions validation
+        boolean allowed = false;
+        if (oldStatus == RaceStatus.DRAFT && newStatus == RaceStatus.SCHEDULED) {
+            allowed = true;
+        } else if (oldStatus == RaceStatus.SCHEDULED && newStatus == RaceStatus.OPEN_FOR_ENTRY) {
+            allowed = true;
+        } else if (oldStatus == RaceStatus.OPEN_FOR_ENTRY && newStatus == RaceStatus.CLOSED_FOR_ENTRY) {
+            allowed = true;
+        }
+
+        if (!allowed) {
+            throw new IllegalArgumentException("Race status cannot change from " + oldStatus + " to " + newStatus);
+        }
+
+        // Validation before opening: SCHEDULED -> OPEN_FOR_ENTRY
+        if (newStatus == RaceStatus.OPEN_FOR_ENTRY) {
+            if (race.getRegistrationOpenAt() == null || race.getRegistrationCloseAt() == null) {
+                throw new IllegalArgumentException("Registration dates are not set");
+            }
+            if (!race.getRegistrationOpenAt().isBefore(race.getRegistrationCloseAt())) {
+                throw new IllegalArgumentException("Registration open time must be before registration close time");
+            }
+            if (!race.getRegistrationCloseAt().isBefore(race.getScheduledTime())) {
+                throw new IllegalArgumentException("Registration close time must be before race scheduled time");
+            }
+            LocalDateTime now = LocalDateTime.now();
+            if (now.isBefore(race.getRegistrationOpenAt()) || now.isAfter(race.getRegistrationCloseAt())) {
+                throw new IllegalArgumentException("Current time must be within registration period to open entry");
+            }
+        }
+
+        race.setStatus(newStatus);
+        return toResponse(raceRepository.save(race));
+    }
+
+    private User getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+        }
+        return userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized"));
     }
 
     public void deleteRace(Long raceId) {
@@ -177,8 +316,14 @@ public class RaceService {
         return RaceResponse.builder()
                 .raceId(race.getRaceId())
                 .meetingId(race.getRaceMeeting().getMeetingId())
+                .meetingName(race.getRaceMeeting().getMeetingName())
+                .meetingDate(race.getRaceMeeting().getMeetingDate())
+                .racecourseName(race.getRaceMeeting().getRacecourse().getRacecourseName())
                 .conditionId(race.getRaceCondition().getConditionId())
                 .conditionName(race.getRaceCondition().getConditionName())
+                .distanceMeters(race.getRaceCondition().getDistance())
+                .trackType(race.getRaceCondition().getTrackType())
+                .classRequirement(race.getRaceCondition().getClassRequirement())
                 .staffId(staff == null ? null : staff.getStaffId())
                 .staffName(staff == null ? null : staff.getUser().getFullName())
                 .refereeId(referee == null ? null : referee.getRefereeId())
@@ -186,7 +331,9 @@ public class RaceService {
                 .raceName(race.getRaceName())
                 .raceNo(race.getRaceNo())
                 .scheduledTime(race.getScheduledTime())
-                .status(race.getStatus())
+                .registrationOpenAt(race.getRegistrationOpenAt())
+                .registrationCloseAt(race.getRegistrationCloseAt())
+                .status(race.getStatus() != null ? race.getStatus().name() : "DRAFT")
                 .createdAt(race.getCreatedAt())
                 .updatedAt(race.getUpdatedAt())
                 .build();

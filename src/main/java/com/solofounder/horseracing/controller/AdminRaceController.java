@@ -39,8 +39,18 @@ public class AdminRaceController {
 
     @PutMapping("/{id}")
     public ResponseEntity<RaceResponse> updateRace(@PathVariable Long id,
-                                                   @Valid @RequestBody RaceRequest request) {
+            @Valid @RequestBody RaceRequest request) {
         return ResponseEntity.ok(raceService.updateRace(id, request));
+    }
+
+    @PutMapping("/{id}/assign-staff")
+    public ResponseEntity<RaceResponse> assignStaff(@PathVariable Long id,
+                                                    @RequestBody java.util.Map<String, Long> payload) {
+        Long staffId = payload.get("staffId");
+        if (staffId == null) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Staff id is required");
+        }
+        return ResponseEntity.ok(raceService.assignStaff(id, staffId));
     }
 
     @DeleteMapping("/{id}")

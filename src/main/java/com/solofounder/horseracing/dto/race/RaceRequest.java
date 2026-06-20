@@ -1,5 +1,6 @@
 package com.solofounder.horseracing.dto.race;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
@@ -24,7 +25,18 @@ public class RaceRequest {
     @NotBlank(message = "Race name is required")
     private String raceName;
 
+    @NotNull(message = "Race number is required")
+    @Min(value = 1, message = "Race number must be positive")
     private Short raceNo;
+
+    @NotNull(message = "Scheduled time is required")
     private LocalDateTime scheduledTime;
+
+    @NotNull(message = "Registration open date-time is required")
+    private LocalDateTime registrationOpenAt;
+
+    @NotNull(message = "Registration close date-time is required")
+    private LocalDateTime registrationCloseAt;
+
     private String status;
 }

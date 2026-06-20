@@ -6,10 +6,19 @@ import com.solofounder.horseracing.dto.auth.LoginRequest;
 import com.solofounder.horseracing.dto.auth.RegisterRequest;
 import com.solofounder.horseracing.dto.user.CreateInternalUserRequest;
 import com.solofounder.horseracing.dto.user.UserResponse;
-import com.solofounder.horseracing.model.User;
+import com.solofounder.horseracing.dto.horse.CreateHorseRequest;
+import com.solofounder.horseracing.dto.horse.UpdateHorseRequest;
+import com.solofounder.horseracing.dto.horse.HorseResponse;
+import com.solofounder.horseracing.dto.staff.CreateStaffRequest;
+import com.solofounder.horseracing.dto.staff.StaffResponse;
+import com.solofounder.horseracing.dto.staff.UpdateStaffRequest;
+import com.solofounder.horseracing.model.*;
+import com.solofounder.horseracing.model.enums.RaceStatus;
 import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.model.enums.UserStatus;
 import com.solofounder.horseracing.repository.UserRepository;
+import com.solofounder.horseracing.repository.HorseRepository;
+import com.solofounder.horseracing.service.HorseService;
 import com.solofounder.horseracing.config.JwtService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,8 +31,15 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -38,6 +54,12 @@ class HorsesRacingApplicationTests {
     private UserRepository userRepository;
 
     @Autowired
+    private HorseRepository horseRepository;
+
+    @Autowired
+    private HorseService horseService;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -49,19 +71,77 @@ class HorsesRacingApplicationTests {
     @Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private jakarta.persistence.EntityManager entityManager;
+
+    @Autowired
+    private com.solofounder.horseracing.repository.SeasonRepository seasonRepository;
+
+    @Autowired
+    private com.solofounder.horseracing.repository.RacecourseRepository racecourseRepository;
+
+    @Autowired
+    private com.solofounder.horseracing.repository.RaceMeetingRepository raceMeetingRepository;
+
+    @Autowired
+    private com.solofounder.horseracing.repository.RaceConditionRepository raceConditionRepository;
+
+    @Autowired
+    private com.solofounder.horseracing.repository.StaffRepository staffRepository;
+
+    @Autowired
+    private com.solofounder.horseracing.repository.JockeyRepository jockeyRepository;
+
+    @Autowired
+    private com.solofounder.horseracing.repository.RefereeRepository refereeRepository;
+
+    @Autowired
+    private com.solofounder.horseracing.repository.RaceRepository raceRepository;
+
     private static final java.util.Set<Long> preExistingUserIds = new java.util.HashSet<>();
 
     @BeforeEach
     void cleanDatabase() {
+        List<User> testEmailUsers = userRepository.findAll().stream()
+                .filter(u -> u.getEmail().endsWith("@example.com"))
+                .toList();
+
+        // Clean up test horses owned by test users to prevent foreign key errors
+        testEmailUsers.forEach(u -> {
+                    List<Horse> horses = horseRepository.findByOwnerUserId(u.getUserId());
+                    if (!horses.isEmpty()) {
+                        horseRepository.deleteAll(horses);
+                    }
+                });
+        horseRepository.flush();
+
+        // Clean up test profile tables before deleting their parent users.
+        testEmailUsers.forEach(this::deleteTestProfiles);
+
+        // Clean up test users
+        testEmailUsers.forEach(userRepository::delete);
+        userRepository.flush();
+
         if (preExistingUserIds.isEmpty()) {
             userRepository.findAll().stream()
                     .map(User::getUserId)
                     .forEach(preExistingUserIds::add);
         }
-        userRepository.findAll().stream()
+        List<User> newUsers = userRepository.findAll().stream()
                 .filter(u -> !preExistingUserIds.contains(u.getUserId()))
-                .forEach(userRepository::delete);
+                .toList();
+        newUsers.forEach(this::deleteTestProfiles);
+        newUsers.forEach(userRepository::delete);
         userRepository.flush();
+    }
+
+    private void deleteTestProfiles(User user) {
+        staffRepository.findByUserUserId(user.getUserId()).ifPresent(staffRepository::delete);
+        jockeyRepository.findByUserUserId(user.getUserId()).ifPresent(jockeyRepository::delete);
+        refereeRepository.findByUserUserId(user.getUserId()).ifPresent(refereeRepository::delete);
+        staffRepository.flush();
+        jockeyRepository.flush();
+        refereeRepository.flush();
     }
 
     // Helper to get JWT token by logging in default admin (or registering a user)
@@ -74,9 +154,13 @@ class HorsesRacingApplicationTests {
     }
 
     private String getHorseOwnerToken() throws Exception {
+        return getHorseOwnerTokenWithEmail("owner@example.com");
+    }
+
+    private String getHorseOwnerTokenWithEmail(String email) throws Exception {
         RegisterRequest register = RegisterRequest.builder()
                 .fullName("Owner A")
-                .email("owner@gmail.com")
+                .email(email)
                 .password("123456")
                 .phone("0900000000")
                 .role(Role.OWNER)
@@ -100,7 +184,7 @@ class HorsesRacingApplicationTests {
     void testRegisterHorseOwner() throws Exception {
         RegisterRequest req = RegisterRequest.builder()
                 .fullName("Owner A")
-                .email("owner@gmail.com")
+                .email("owner@example.com")
                 .password("123456")
                 .phone("0900000000")
                 .role(Role.OWNER)
@@ -114,7 +198,7 @@ class HorsesRacingApplicationTests {
 
         AuthResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), AuthResponse.class);
         assertNotNull(response.getToken());
-        assertEquals("owner@gmail.com", response.getEmail());
+        assertEquals("owner@example.com", response.getEmail());
         assertEquals("0900000000", response.getPhone());
         assertEquals(Role.OWNER, response.getRole());
     }
@@ -124,7 +208,7 @@ class HorsesRacingApplicationTests {
     void testRegisterJockey() throws Exception {
         RegisterRequest req = RegisterRequest.builder()
                 .fullName("Jockey A")
-                .email("jockey@gmail.com")
+                .email("jockey@example.com")
                 .password("123456")
                 .phone("0901111111")
                 .role(Role.JOCKEY)
@@ -138,7 +222,7 @@ class HorsesRacingApplicationTests {
 
         AuthResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), AuthResponse.class);
         assertNotNull(response.getToken());
-        assertEquals("jockey@gmail.com", response.getEmail());
+        assertEquals("jockey@example.com", response.getEmail());
         assertEquals("0901111111", response.getPhone());
         assertEquals(Role.JOCKEY, response.getRole());
     }
@@ -148,7 +232,7 @@ class HorsesRacingApplicationTests {
     void testRegisterSpectator() throws Exception {
         RegisterRequest req = RegisterRequest.builder()
                 .fullName("Spectator A")
-                .email("spectator@gmail.com")
+                .email("spectator@example.com")
                 .password("123456")
                 .phone("0902222222")
                 .role(Role.SPECTATOR)
@@ -162,7 +246,7 @@ class HorsesRacingApplicationTests {
 
         AuthResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), AuthResponse.class);
         assertNotNull(response.getToken());
-        assertEquals("spectator@gmail.com", response.getEmail());
+        assertEquals("spectator@example.com", response.getEmail());
         assertEquals("0902222222", response.getPhone());
         assertEquals(Role.SPECTATOR, response.getRole());
     }
@@ -172,7 +256,7 @@ class HorsesRacingApplicationTests {
     void testRegisterAdminPubliclyFails() throws Exception {
         RegisterRequest req = RegisterRequest.builder()
                 .fullName("Admin A")
-                .email("admin_new@gmail.com")
+                .email("admin_new@example.com")
                 .password("123456")
                 .phone("0903333333")
                 .role(Role.ADMIN)
@@ -189,7 +273,7 @@ class HorsesRacingApplicationTests {
     void testRegisterRefereePubliclyFails() throws Exception {
         RegisterRequest req = RegisterRequest.builder()
                 .fullName("Referee A")
-                .email("referee_new@gmail.com")
+                .email("referee_new@example.com")
                 .password("123456")
                 .phone("0904444444")
                 .role(Role.REFEREE)
@@ -204,11 +288,10 @@ class HorsesRacingApplicationTests {
     // 6. Login with correct email/password -> Expected: 200 OK and token returned
     @Test
     void testLoginWithCorrectCredentials() throws Exception {
-        // First register
         testRegisterHorseOwner();
 
         LoginRequest login = LoginRequest.builder()
-                .email("owner@gmail.com")
+                .email("owner@example.com")
                 .password("123456")
                 .build();
 
@@ -220,7 +303,7 @@ class HorsesRacingApplicationTests {
 
         AuthResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), AuthResponse.class);
         assertNotNull(response.getToken());
-        assertEquals("owner@gmail.com", response.getEmail());
+        assertEquals("owner@example.com", response.getEmail());
         assertEquals("0900000000", response.getPhone());
         assertEquals(Role.OWNER, response.getRole());
     }
@@ -231,7 +314,7 @@ class HorsesRacingApplicationTests {
         testRegisterHorseOwner();
 
         LoginRequest login = LoginRequest.builder()
-                .email("owner@gmail.com")
+                .email("owner@example.com")
                 .password("wrongpassword")
                 .build();
 
@@ -246,7 +329,7 @@ class HorsesRacingApplicationTests {
     void testAdminCreateUserWithoutToken() throws Exception {
         CreateInternalUserRequest req = CreateInternalUserRequest.builder()
                 .fullName("Referee A")
-                .email("referee@gmail.com")
+                .email("referee@example.com")
                 .password("123456")
                 .phone("0922222222")
                 .role(Role.REFEREE)
@@ -265,7 +348,7 @@ class HorsesRacingApplicationTests {
 
         CreateInternalUserRequest req = CreateInternalUserRequest.builder()
                 .fullName("Referee A")
-                .email("referee@gmail.com")
+                .email("referee@example.com")
                 .password("123456")
                 .phone("0922222222")
                 .role(Role.REFEREE)
@@ -285,7 +368,7 @@ class HorsesRacingApplicationTests {
 
         CreateInternalUserRequest req = CreateInternalUserRequest.builder()
                 .fullName("Referee A")
-                .email("referee@gmail.com")
+                .email("referee@example.com")
                 .password("123456")
                 .phone("0922222222")
                 .role(Role.REFEREE)
@@ -300,7 +383,7 @@ class HorsesRacingApplicationTests {
 
         UserResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), UserResponse.class);
         assertNotNull(response.getUserId());
-        assertEquals("referee@gmail.com", response.getEmail());
+        assertEquals("referee@example.com", response.getEmail());
         assertEquals("0922222222", response.getPhone());
         assertEquals(Role.REFEREE, response.getRole());
         assertEquals(UserStatus.ACTIVE, response.getStatus());
@@ -311,7 +394,7 @@ class HorsesRacingApplicationTests {
     void testAdminCreatesRefereeAndBCryptHash() throws Exception {
         testAdminCreateUserWithAdminToken();
 
-        User savedUser = userRepository.findByEmail("referee@gmail.com").orElse(null);
+        User savedUser = userRepository.findByEmail("referee@example.com").orElse(null);
         assertNotNull(savedUser);
         assertTrue(passwordEncoder.matches("123456", savedUser.getPasswordHash()));
         assertNotEquals("123456", savedUser.getPasswordHash());
@@ -324,7 +407,7 @@ class HorsesRacingApplicationTests {
 
         CreateInternalUserRequest req = CreateInternalUserRequest.builder()
                 .fullName("Owner B")
-                .email("ownerb@gmail.com")
+                .email("ownerb@example.com")
                 .password("123456")
                 .phone("0900000001")
                 .role(Role.OWNER)
@@ -342,7 +425,7 @@ class HorsesRacingApplicationTests {
     void testRegisterStaffPubliclyFails() throws Exception {
         RegisterRequest req = RegisterRequest.builder()
                 .fullName("Staff A")
-                .email("staff-public@gmail.com")
+                .email("staff-public@example.com")
                 .password("123456")
                 .phone("0911111111")
                 .role(Role.STAFF)
@@ -361,7 +444,7 @@ class HorsesRacingApplicationTests {
 
         CreateInternalUserRequest req = CreateInternalUserRequest.builder()
                 .fullName("Staff A")
-                .email("staff@gmail.com")
+                .email("staff@example.com")
                 .password("123456")
                 .phone("0911111111")
                 .role(Role.STAFF)
@@ -376,13 +459,13 @@ class HorsesRacingApplicationTests {
 
         UserResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), UserResponse.class);
         assertNotNull(response.getUserId());
-        assertEquals("staff@gmail.com", response.getEmail());
+        assertEquals("staff@example.com", response.getEmail());
         assertEquals("0911111111", response.getPhone());
         assertEquals(Role.STAFF, response.getRole());
         assertEquals(UserStatus.ACTIVE, response.getStatus());
 
         // Verify stored in DB with BCrypt password hash
-        User savedUser = userRepository.findByEmail("staff@gmail.com").orElse(null);
+        User savedUser = userRepository.findByEmail("staff@example.com").orElse(null);
         assertNotNull(savedUser);
         assertTrue(passwordEncoder.matches("123456", savedUser.getPasswordHash()));
         assertNotEquals("123456", savedUser.getPasswordHash());
@@ -395,7 +478,7 @@ class HorsesRacingApplicationTests {
 
         CreateInternalUserRequest req = CreateInternalUserRequest.builder()
                 .fullName("Staff A")
-                .email("staff@gmail.com")
+                .email("staff@example.com")
                 .password("123456")
                 .phone("0911111111")
                 .role(Role.STAFF)
@@ -411,21 +494,17 @@ class HorsesRacingApplicationTests {
     // 16. Verify database still stores lowercase values (admin, staff, owner, referee, jockey, spectator)
     @Test
     void testDatabaseStoresLowercaseValues() throws Exception {
-        // Perform registration of owner
         testRegisterHorseOwner();
-
-        // Perform admin creation of referee
         testAdminCreateUserWithAdminToken();
 
-        // Query the database directly to bypass JPA converters
         java.util.Map<String, Object> dbOwner = jdbcTemplate.queryForMap(
-                "SELECT role, status FROM [user] WHERE email = 'owner@gmail.com'"
+                "SELECT role, status FROM [user] WHERE email = 'owner@example.com'"
         );
         assertEquals("owner", dbOwner.get("role"));
         assertEquals("active", dbOwner.get("status"));
 
         java.util.Map<String, Object> dbReferee = jdbcTemplate.queryForMap(
-                "SELECT role, status FROM [user] WHERE email = 'referee@gmail.com'"
+                "SELECT role, status FROM [user] WHERE email = 'referee@example.com'"
         );
         assertEquals("referee", dbReferee.get("role"));
         assertEquals("active", dbReferee.get("status"));
@@ -457,7 +536,7 @@ class HorsesRacingApplicationTests {
     void testRegisterWithShortPasswordFails() throws Exception {
         RegisterRequest req = RegisterRequest.builder()
                 .fullName("Test User")
-                .email("valid@gmail.com")
+                .email("test.valid@example.com")
                 .password("123")
                 .phone("0900000000")
                 .role(Role.OWNER)
@@ -477,7 +556,7 @@ class HorsesRacingApplicationTests {
     @Test
     void testLoginWithBlankPasswordFails() throws Exception {
         LoginRequest req = LoginRequest.builder()
-                .email("valid@gmail.com")
+                .email("test.valid@example.com")
                 .password("")
                 .build();
 
@@ -494,7 +573,936 @@ class HorsesRacingApplicationTests {
     // 20. Access /v3/api-docs -> Expected: 200 OK
     @Test
     void testGetApiDocs() throws Exception {
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/v3/api-docs"))
+        mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk());
+    }
+
+    // --- OWNER HORSE MANAGEMENT FLOW INTEGRATION TESTS ---
+
+    // Test 2: OWNER creates horse
+    @Test
+    void testOwnerCreatesHorseSuccessfully() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+
+        CreateHorseRequest request = CreateHorseRequest.builder()
+                .horseName("Owner Horse Test")
+                .color("Brown")
+                .age((short) 4)
+                .gender("M")
+                .healthNote("Healthy")
+                .build();
+
+        MvcResult result = mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        HorseResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), HorseResponse.class);
+        assertNotNull(response.getHorseId());
+        assertEquals("Owner Horse Test", response.getHorseName());
+        assertEquals("Brown", response.getColor());
+        assertEquals((short) 4, response.getAge());
+        assertEquals("M", response.getGender());
+        assertEquals("ACTIVE", response.getStatus()); // Default: ACTIVE
+        assertEquals("Healthy", response.getHealthNote());
+        assertEquals(0, BigDecimal.ZERO.compareTo(response.getCurrentScore())); // Default: 0
+        assertEquals((short) 5, response.getHorseClass()); // Default: 5
+        assertNotNull(response.getOwnerId());
+    }
+
+    // Test 3: OWNER gets own horses
+    @Test
+    void testOwnerGetsOwnHorses() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+
+        CreateHorseRequest request = CreateHorseRequest.builder()
+                .horseName("Owner Horse A")
+                .color("White")
+                .age((short) 3)
+                .gender("F")
+                .healthNote("Superb")
+                .build();
+
+        mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        // Get own horses list
+        MvcResult getResult = mockMvc.perform(get("/api/owner/horses")
+                        .header("Authorization", ownerToken))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        HorseResponse[] horses = objectMapper.readValue(getResult.getResponse().getContentAsString(), HorseResponse[].class);
+        assertTrue(horses.length > 0);
+        assertEquals("Owner Horse A", horses[0].getHorseName());
+        assertEquals("White", horses[0].getColor());
+        assertEquals("ACTIVE", horses[0].getStatus());
+    }
+
+    // Test 4: OWNER gets own horse detail
+    @Test
+    void testOwnerGetsOwnHorseDetail() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+
+        CreateHorseRequest request = CreateHorseRequest.builder()
+                .horseName("Owner Horse B")
+                .color("Grey")
+                .age((short) 4)
+                .gender("M")
+                .healthNote("Fit")
+                .build();
+
+        MvcResult createResult = mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        HorseResponse created = objectMapper.readValue(createResult.getResponse().getContentAsString(), HorseResponse.class);
+
+        MvcResult detailResult = mockMvc.perform(get("/api/owner/horses/" + created.getHorseId())
+                        .header("Authorization", ownerToken))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        HorseResponse detail = objectMapper.readValue(detailResult.getResponse().getContentAsString(), HorseResponse.class);
+        assertEquals(created.getHorseId(), detail.getHorseId());
+        assertEquals("Owner Horse B", detail.getHorseName());
+        assertEquals("Grey", detail.getColor());
+        assertEquals("ACTIVE", detail.getStatus());
+    }
+
+    // Test 5: OWNER updates own horse
+    @Test
+    void testOwnerUpdatesOwnHorse() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+
+        CreateHorseRequest request = CreateHorseRequest.builder()
+                .horseName("Original Name")
+                .color("Black")
+                .age((short) 3)
+                .gender("F")
+                .healthNote("Original Note")
+                .build();
+
+        MvcResult createResult = mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        HorseResponse created = objectMapper.readValue(createResult.getResponse().getContentAsString(), HorseResponse.class);
+
+        UpdateHorseRequest updateRequest = UpdateHorseRequest.builder()
+                .horseName("Updated Name")
+                .color("Red")
+                .age((short) 4)
+                .gender("F")
+                .healthNote("Recovered")
+                .status("INJURED") // Uppercase status value
+                .build();
+
+        MvcResult updateResult = mockMvc.perform(put("/api/owner/horses/" + created.getHorseId())
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        HorseResponse updated = objectMapper.readValue(updateResult.getResponse().getContentAsString(), HorseResponse.class);
+        assertEquals("Updated Name", updated.getHorseName());
+        assertEquals("Red", updated.getColor());
+        assertEquals((short) 4, updated.getAge());
+        assertEquals("INJURED", updated.getStatus()); // uppercase response
+        assertEquals("Recovered", updated.getHealthNote());
+    }
+
+    // Test 6: Another OWNER cannot view the horse
+    @Test
+    void testAnotherOwnerCannotViewHorse() throws Exception {
+        String ownerAToken = getHorseOwnerTokenWithEmail("ownera@example.com");
+        String ownerBToken = getHorseOwnerTokenWithEmail("ownerb@example.com");
+
+        CreateHorseRequest request = CreateHorseRequest.builder()
+                .horseName("Owner A Horse")
+                .color("Brown")
+                .age((short) 5)
+                .gender("M")
+                .healthNote("None")
+                .build();
+
+        MvcResult createResult = mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerAToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        HorseResponse created = objectMapper.readValue(createResult.getResponse().getContentAsString(), HorseResponse.class);
+
+        // Owner B tries to get Owner A's horse
+        mockMvc.perform(get("/api/owner/horses/" + created.getHorseId())
+                        .header("Authorization", ownerBToken))
+                .andExpect(status().isNotFound());
+    }
+
+    // Test 7: Another OWNER cannot update the horse
+    @Test
+    void testAnotherOwnerCannotUpdateHorse() throws Exception {
+        String ownerAToken = getHorseOwnerTokenWithEmail("ownera@example.com");
+        String ownerBToken = getHorseOwnerTokenWithEmail("ownerb@example.com");
+
+        CreateHorseRequest request = CreateHorseRequest.builder()
+                .horseName("Owner A Horse")
+                .color("Brown")
+                .age((short) 5)
+                .gender("M")
+                .healthNote("None")
+                .build();
+
+        MvcResult createResult = mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerAToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        HorseResponse created = objectMapper.readValue(createResult.getResponse().getContentAsString(), HorseResponse.class);
+
+        // Owner B tries to update Owner A's horse
+        UpdateHorseRequest updateRequest = UpdateHorseRequest.builder()
+                .horseName("Hacked Name")
+                .color("Brown")
+                .age((short) 2)
+                .gender("F")
+                .status("RETIRED")
+                .build();
+
+        mockMvc.perform(put("/api/owner/horses/" + created.getHorseId())
+                        .header("Authorization", ownerBToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isNotFound());
+
+        // Verify that database record was not modified
+        Horse dbHorse = horseRepository.findById(created.getHorseId()).orElseThrow();
+        assertEquals("Owner A Horse", dbHorse.getHorseName());
+        assertEquals((short) 5, dbHorse.getAge());
+        assertEquals("active", dbHorse.getStatus()); // remains lowercase active in DB
+    }
+
+    // Test 8: No token
+    @Test
+    void testNoTokenGetOwnHorses() throws Exception {
+        mockMvc.perform(get("/api/owner/horses"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // Test 9: Non-OWNER token
+    @Test
+    void testNonOwnerTokenGetOwnHorses() throws Exception {
+        // Register jockey
+        RegisterRequest req = RegisterRequest.builder()
+                .fullName("Jockey Test")
+                .email("test.jockey2@example.com")
+                .password("123456")
+                .phone("0901111112")
+                .role(Role.JOCKEY)
+                .build();
+
+        MvcResult result = mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        AuthResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), AuthResponse.class);
+        String jockeyToken = "Bearer " + response.getToken();
+
+        mockMvc.perform(get("/api/owner/horses")
+                        .header("Authorization", jockeyToken))
+                .andExpect(status().isForbidden());
+    }
+
+    // Test Validation boundaries
+    @Test
+    void testOwnerHorseValidationFails() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+
+        // 1. Blank name
+        CreateHorseRequest blankName = CreateHorseRequest.builder()
+                .horseName(" ")
+                .color("Brown")
+                .age((short) 4)
+                .gender("M")
+                .build();
+
+        mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(blankName)))
+                .andExpect(status().isBadRequest());
+
+        // 2. Blank color
+        CreateHorseRequest blankColor = CreateHorseRequest.builder()
+                .horseName("Thunder")
+                .color(" ")
+                .age((short) 4)
+                .gender("M")
+                .build();
+
+        mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(blankColor)))
+                .andExpect(status().isBadRequest());
+
+        // 3. Negative age
+        CreateHorseRequest negativeAge = CreateHorseRequest.builder()
+                .horseName("Negative Age")
+                .color("Brown")
+                .age((short) -1)
+                .gender("M")
+                .build();
+
+        mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(negativeAge)))
+                .andExpect(status().isBadRequest());
+
+        // 4. Age exceeds 30
+        CreateHorseRequest ageExceeds30 = CreateHorseRequest.builder()
+                .horseName("Old Horse")
+                .color("Brown")
+                .age((short) 31)
+                .gender("M")
+                .build();
+
+        mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(ageExceeds30)))
+                .andExpect(status().isBadRequest());
+
+        // 5. Age = 0 (invalid, must be from 1 to 30)
+        CreateHorseRequest ageIsZero = CreateHorseRequest.builder()
+                .horseName("Baby Horse")
+                .color("Brown")
+                .age((short) 0)
+                .gender("M")
+                .build();
+
+        mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(ageIsZero)))
+                .andExpect(status().isBadRequest());
+
+        // 6. Invalid gender
+        CreateHorseRequest invalidGender = CreateHorseRequest.builder()
+                .horseName("Invalid Gender")
+                .color("Brown")
+                .age((short) 4)
+                .gender("X")
+                .build();
+
+        mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidGender)))
+                .andExpect(status().isBadRequest());
+
+        // 7. Invalid status (on Update)
+        CreateHorseRequest validRequest = CreateHorseRequest.builder()
+                .horseName("Temp Horse")
+                .color("Brown")
+                .age((short) 4)
+                .gender("M")
+                .build();
+
+        MvcResult createResult = mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validRequest)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        HorseResponse created = objectMapper.readValue(createResult.getResponse().getContentAsString(), HorseResponse.class);
+
+        UpdateHorseRequest invalidStatus = UpdateHorseRequest.builder()
+                .horseName("Invalid Status")
+                .color("Brown")
+                .age((short) 4)
+                .gender("M")
+                .status("invalid_status")
+                .build();
+
+        mockMvc.perform(put("/api/owner/horses/" + created.getHorseId())
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidStatus)))
+                .andExpect(status().isBadRequest());
+    }
+
+    // Test 9.1: Creating a horse ignores user-defined custom horseClass and currentScore
+    @Test
+    void testCreateHorseIgnoresCustomScoreAndClass() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+
+        // Construct raw JSON body with custom score and class
+        String payload = "{"
+                + "\"horseName\":\"Custom test\","
+                + "\"color\":\"Brown\","
+                + "\"age\":5,"
+                + "\"gender\":\"M\","
+                + "\"currentScore\":100,"
+                + "\"horseClass\":1"
+                + "}";
+
+        MvcResult result = mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        HorseResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), HorseResponse.class);
+        assertEquals(0, BigDecimal.ZERO.compareTo(response.getCurrentScore())); // ignored, default 0
+        assertEquals((short) 5, response.getHorseClass()); // ignored, default 5
+    }
+
+    // Test 9.2: Owner updates own horse and does not modify horseClass or currentScore
+    @Test
+    void testOwnerUpdatePreservesScoreAndClass() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+
+        // 1. Create horse
+        CreateHorseRequest request = CreateHorseRequest.builder()
+                .horseName("Update Preserve")
+                .color("White")
+                .age((short) 4)
+                .gender("M")
+                .build();
+
+        MvcResult createResult = mockMvc.perform(post("/api/owner/horses")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        HorseResponse created = objectMapper.readValue(createResult.getResponse().getContentAsString(), HorseResponse.class);
+
+        // 2. Direct database update to score and class
+        jdbcTemplate.update(
+                "UPDATE dbo.horse SET current_score = 55.00, horse_class = 3 WHERE horse_id = ?",
+                created.getHorseId()
+        );
+        entityManager.flush();
+        entityManager.clear();
+
+        // 3. Perform owner update
+        UpdateHorseRequest updateRequest = UpdateHorseRequest.builder()
+                .horseName("Update Preserve Updated")
+                .color("Gold")
+                .age((short) 5)
+                .gender("M")
+                .status("ACTIVE")
+                .build();
+
+        MvcResult updateResult = mockMvc.perform(put("/api/owner/horses/" + created.getHorseId())
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        HorseResponse response = objectMapper.readValue(updateResult.getResponse().getContentAsString(), HorseResponse.class);
+        assertEquals("Update Preserve Updated", response.getHorseName());
+        assertEquals("Gold", response.getColor());
+        assertEquals(0, BigDecimal.valueOf(55).compareTo(response.getCurrentScore())); // score preserved!
+        assertEquals((short) 3, response.getHorseClass()); // class preserved!
+    }
+
+    // Test 9.3: Score classification helper returns correct values based on boundaries
+    @Test
+    void testCalculateHorseClassHelper() {
+        assertEquals((short) 5, horseService.calculateHorseClass(BigDecimal.valueOf(0)));
+        assertEquals((short) 5, horseService.calculateHorseClass(BigDecimal.valueOf(19)));
+        assertEquals((short) 5, horseService.calculateHorseClass(BigDecimal.valueOf(19.99)));
+        assertEquals((short) 4, horseService.calculateHorseClass(BigDecimal.valueOf(20)));
+        assertEquals((short) 4, horseService.calculateHorseClass(BigDecimal.valueOf(39)));
+        assertEquals((short) 4, horseService.calculateHorseClass(BigDecimal.valueOf(39.5)));
+        assertEquals((short) 3, horseService.calculateHorseClass(BigDecimal.valueOf(40)));
+        assertEquals((short) 3, horseService.calculateHorseClass(BigDecimal.valueOf(59)));
+        assertEquals((short) 2, horseService.calculateHorseClass(BigDecimal.valueOf(60)));
+        assertEquals((short) 2, horseService.calculateHorseClass(BigDecimal.valueOf(79)));
+        assertEquals((short) 1, horseService.calculateHorseClass(BigDecimal.valueOf(80)));
+        assertEquals((short) 1, horseService.calculateHorseClass(BigDecimal.valueOf(100)));
+        
+        // Null or negative values return Class 5
+        assertEquals((short) 5, horseService.calculateHorseClass(null));
+        assertEquals((short) 5, horseService.calculateHorseClass(BigDecimal.valueOf(-5)));
+    }
+
+    // --- STAFF PROFILE MANAGEMENT TESTS ---
+
+    @Test
+    void testGetStaffProfileWithStaffTokenAndExistingProfile() throws Exception {
+        Staff staff = createStaff("staff.profile@example.com", "Staff Profile", "STPF01");
+        String staffToken = "Bearer " + jwtService.generateToken(staff.getUser());
+
+        MvcResult result = mockMvc.perform(get("/api/staff")
+                        .header("Authorization", staffToken))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        StaffResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), StaffResponse.class);
+        assertEquals(staff.getStaffId(), response.getStaffId());
+        assertEquals(staff.getUser().getUserId(), response.getUserId());
+        assertEquals("Staff Profile", response.getFullName());
+        assertEquals("staff.profile@example.com", response.getEmail());
+        assertEquals("STPF01", response.getStaffCode());
+        assertEquals("active", response.getStatus());
+    }
+
+    @Test
+    void testGetStaffProfileWithoutTokenFails() throws Exception {
+        mockMvc.perform(get("/api/staff"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void testGetStaffProfileWithOwnerTokenFails() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+
+        mockMvc.perform(get("/api/staff")
+                        .header("Authorization", ownerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void testGetStaffProfileWithoutProfileFails() throws Exception {
+        User staffUser = createStaffUser("staff.noprofile@example.com", "Staff No Profile");
+        String staffToken = "Bearer " + jwtService.generateToken(staffUser);
+
+        mockMvc.perform(get("/api/staff")
+                        .header("Authorization", staffToken))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void testAdminCreateStaffProfileSuccessfully() throws Exception {
+        String adminToken = getAdminToken();
+        User staffUser = createStaffUser("staff.create@example.com", "Staff Create");
+
+        CreateStaffRequest request = CreateStaffRequest.builder()
+                .userId(staffUser.getUserId())
+                .staffCode("STCR01")
+                .department("Race Management")
+                .status("active")
+                .build();
+
+        MvcResult result = mockMvc.perform(post("/api/staff")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        StaffResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), StaffResponse.class);
+        assertNotNull(response.getStaffId());
+        assertEquals(staffUser.getUserId(), response.getUserId());
+        assertEquals("Staff Create", response.getFullName());
+        assertEquals("staff.create@example.com", response.getEmail());
+        assertEquals("STCR01", response.getStaffCode());
+        assertEquals("Race Management", response.getDepartment());
+        assertEquals("active", response.getStatus());
+    }
+
+    @Test
+    void testAdminCreateStaffProfileWithOwnerUserFails() throws Exception {
+        String adminToken = getAdminToken();
+        String ownerToken = getHorseOwnerTokenWithEmail("staff.owneruser@example.com");
+        String ownerEmail = jwtService.extractUsername(ownerToken.substring("Bearer ".length()));
+        User ownerUser = userRepository.findByEmail(ownerEmail).orElseThrow();
+
+        CreateStaffRequest request = CreateStaffRequest.builder()
+                .userId(ownerUser.getUserId())
+                .staffCode("STOW01")
+                .department("Race Management")
+                .status("active")
+                .build();
+
+        mockMvc.perform(post("/api/staff")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testAdminCreateStaffProfileDuplicateUserFails() throws Exception {
+        String adminToken = getAdminToken();
+        Staff staff = createStaff("staff.duplicateuser@example.com", "Staff Duplicate User", "STDU01");
+
+        CreateStaffRequest request = CreateStaffRequest.builder()
+                .userId(staff.getUser().getUserId())
+                .staffCode("STDU02")
+                .department("Race Management")
+                .status("active")
+                .build();
+
+        mockMvc.perform(post("/api/staff")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testAdminCreateStaffProfileDuplicateStaffCodeFails() throws Exception {
+        String adminToken = getAdminToken();
+        createStaff("staff.duplicatecode.a@example.com", "Staff Duplicate Code A", "STDC01");
+        User staffUser = createStaffUser("staff.duplicatecode.b@example.com", "Staff Duplicate Code B");
+
+        CreateStaffRequest request = CreateStaffRequest.builder()
+                .userId(staffUser.getUserId())
+                .staffCode("STDC01")
+                .department("Race Management")
+                .status("active")
+                .build();
+
+        mockMvc.perform(post("/api/staff")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testOwnerCreateStaffProfileFails() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+        User staffUser = createStaffUser("staff.ownercreate@example.com", "Staff Owner Create");
+
+        CreateStaffRequest request = CreateStaffRequest.builder()
+                .userId(staffUser.getUserId())
+                .staffCode("STOC01")
+                .department("Race Management")
+                .status("active")
+                .build();
+
+        mockMvc.perform(post("/api/staff")
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void testAdminUpdateStaffProfileSuccessfully() throws Exception {
+        String adminToken = getAdminToken();
+        Staff staff = createStaff("staff.update@example.com", "Staff Update", "STUP01");
+
+        UpdateStaffRequest request = UpdateStaffRequest.builder()
+                .staffCode("STUP02")
+                .department("Race Operations")
+                .status("inactive")
+                .build();
+
+        MvcResult result = mockMvc.perform(put("/api/staff/" + staff.getStaffId())
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        StaffResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), StaffResponse.class);
+        assertEquals(staff.getStaffId(), response.getStaffId());
+        assertEquals("STUP02", response.getStaffCode());
+        assertEquals("Race Operations", response.getDepartment());
+        assertEquals("inactive", response.getStatus());
+        assertEquals(staff.getUser().getUserId(), response.getUserId());
+    }
+
+    @Test
+    void testAdminUpdateStaffProfileNotFoundFails() throws Exception {
+        String adminToken = getAdminToken();
+
+        UpdateStaffRequest request = UpdateStaffRequest.builder()
+                .staffCode("STNF01")
+                .department("Race Operations")
+                .status("active")
+                .build();
+
+        mockMvc.perform(put("/api/staff/999999999")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void testAdminUpdateStaffProfileDuplicateStaffCodeFails() throws Exception {
+        String adminToken = getAdminToken();
+        Staff staffA = createStaff("staff.update.dup.a@example.com", "Staff Update Dup A", "STUA01");
+        Staff staffB = createStaff("staff.update.dup.b@example.com", "Staff Update Dup B", "STUB01");
+
+        UpdateStaffRequest request = UpdateStaffRequest.builder()
+                .staffCode(staffA.getStaffCode())
+                .department("Race Operations")
+                .status("active")
+                .build();
+
+        mockMvc.perform(put("/api/staff/" + staffB.getStaffId())
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testOwnerUpdateStaffProfileFails() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+        Staff staff = createStaff("staff.ownerupdate@example.com", "Staff Owner Update", "STOU01");
+
+        UpdateStaffRequest request = UpdateStaffRequest.builder()
+                .staffCode("STOU02")
+                .department("Race Operations")
+                .status("active")
+                .build();
+
+        mockMvc.perform(put("/api/staff/" + staff.getStaffId())
+                        .header("Authorization", ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    // --- ADMIN RACE SETUP & LIFECYCLE TESTS ---
+
+    private User createStaffUser(String email, String fullName) {
+        return userRepository.save(User.builder()
+                .fullName(fullName)
+                .email(email)
+                .passwordHash(passwordEncoder.encode("123456"))
+                .phone("0912345678")
+                .role(Role.STAFF)
+                .status(UserStatus.ACTIVE)
+                .build());
+    }
+
+    private Staff createStaff(String email, String fullName, String staffCode) {
+        User user = createStaffUser(email, fullName);
+
+        return staffRepository.save(Staff.builder()
+                .user(user)
+                .staffCode(staffCode)
+                .department("Racing Operations")
+                .status("active")
+                .createdAt(java.time.LocalDateTime.now())
+                .build());
+    }
+
+    private Referee createReferee(String email, String fullName, String licenseNo) {
+        User user = userRepository.save(User.builder()
+                .fullName(fullName)
+                .email(email)
+                .passwordHash(passwordEncoder.encode("123456"))
+                .phone("0987654321")
+                .role(Role.REFEREE)
+                .status(UserStatus.ACTIVE)
+                .build());
+
+        return refereeRepository.save(Referee.builder()
+                .user(user)
+                .licenseNo(licenseNo)
+                .status("active")
+                .createdAt(java.time.LocalDateTime.now())
+                .build());
+    }
+
+    private Race setupRaceHierarchy(Staff staff, Referee referee, String statusStr, java.time.LocalDateTime openAt, java.time.LocalDateTime closeAt, java.time.LocalDateTime scheduledAt) {
+        Season season = seasonRepository.save(Season.builder()
+                .seasonName("Test Season")
+                .startDate(java.time.LocalDate.now().minusMonths(3))
+                .endDate(java.time.LocalDate.now().plusMonths(3))
+                .status("active")
+                .build());
+                
+        Racecourse racecourse = racecourseRepository.save(Racecourse.builder()
+                .racecourseName("Test Course")
+                .location("Test Location")
+                .surfaceType("Turf")
+                .capacity(10000)
+                .build());
+                
+        RaceMeeting meeting = raceMeetingRepository.save(RaceMeeting.builder()
+                .meetingName("Test Meeting")
+                .season(season)
+                .racecourse(racecourse)
+                .meetingDate(scheduledAt.toLocalDate())
+                .status("scheduled")
+                .build());
+                
+        RaceCondition condition = raceConditionRepository.save(RaceCondition.builder()
+                .conditionName("Test Condition")
+                .distance(1200)
+                .trackType("Turf")
+                .minEntries((short) 3)
+                .maxEntries((short) 10)
+                .classRequirement("Class 5")
+                .build());
+                
+        RaceStatus status = RaceStatus.DRAFT;
+        if (statusStr != null) {
+            status = RaceStatus.valueOf(statusStr.toUpperCase());
+        }
+
+        return raceRepository.save(Race.builder()
+                .raceMeeting(meeting)
+                .raceCondition(condition)
+                .staff(staff)
+                .referee(referee)
+                .raceName("Test Race")
+                .raceNo((short) 1)
+                .scheduledTime(scheduledAt)
+                .registrationOpenAt(openAt)
+                .registrationCloseAt(closeAt)
+                .status(status)
+                .build());
+    }
+
+    @Test
+    void testAdminCanUpdateRaceStatusLifecycle() throws Exception {
+        String adminToken = getAdminToken();
+        Staff staff = createStaff("lifecycle.staff@example.com", "Lifecycle Staff", "LCSF01");
+        Referee referee = createReferee("lifecycle.ref@example.com", "Lifecycle Referee", "LCRF01");
+
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        java.time.LocalDateTime openAt = now.minusMinutes(10);
+        java.time.LocalDateTime closeAt = now.plusMinutes(50);
+        java.time.LocalDateTime scheduledAt = now.plusHours(2);
+
+        Race race = setupRaceHierarchy(staff, referee, "DRAFT", openAt, closeAt, scheduledAt);
+
+        // 1. Transition: DRAFT -> SCHEDULED
+        mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SCHEDULED\"}"))
+                .andExpect(status().isOk());
+
+        // 2. Transition: SCHEDULED -> OPEN_FOR_ENTRY
+        mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"OPEN_FOR_ENTRY\"}"))
+                .andExpect(status().isOk());
+
+        // 3. Transition: OPEN_FOR_ENTRY -> CLOSED_FOR_ENTRY
+        mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"CLOSED_FOR_ENTRY\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testStaffOwnershipCheck() throws Exception {
+        Staff staffA = createStaff("staffa@example.com", "Staff A", "STFA01");
+        Staff staffB = createStaff("staffb@example.com", "Staff B", "STFB01");
+        Referee referee = createReferee("ref@example.com", "Referee A", "RF01");
+
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        Race race = setupRaceHierarchy(staffA, referee, "DRAFT", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
+
+        String tokenStaffA = "Bearer " + jwtService.generateToken(staffA.getUser());
+        String tokenStaffB = "Bearer " + jwtService.generateToken(staffB.getUser());
+
+        // Staff B (not owner) tries to change status -> 403 Forbidden
+        mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
+                        .header("Authorization", tokenStaffB)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SCHEDULED\"}"))
+                .andExpect(status().isForbidden());
+
+        // Staff A (owner) changes status -> 200 OK
+        mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
+                        .header("Authorization", tokenStaffA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SCHEDULED\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testInvalidTransitionsFail() throws Exception {
+        String adminToken = getAdminToken();
+        Staff staff = createStaff("trans.staff@example.com", "Trans Staff", "TSF01");
+        Referee referee = createReferee("trans.ref@example.com", "Trans Referee", "TRF01");
+
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        Race race = setupRaceHierarchy(staff, referee, "DRAFT", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
+
+        // DRAFT -> OPEN_FOR_ENTRY directly should fail with 400 Bad Request
+        mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"OPEN_FOR_ENTRY\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testOpenForEntryDateCheck() throws Exception {
+        String adminToken = getAdminToken();
+        Staff staff = createStaff("datecheck.staff@example.com", "DateCheck Staff", "DCSF01");
+        Referee referee = createReferee("datecheck.ref@example.com", "DateCheck Referee", "DCRF01");
+
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        // Registration is in the past
+        java.time.LocalDateTime openAt = now.minusHours(3);
+        java.time.LocalDateTime closeAt = now.minusHours(2);
+        java.time.LocalDateTime scheduledAt = now.plusHours(2);
+
+        Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", openAt, closeAt, scheduledAt);
+
+        // SCHEDULED -> OPEN_FOR_ENTRY should fail since current time is after registrationCloseAt
+        mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"OPEN_FOR_ENTRY\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testOpenRacesVisibility() throws Exception {
+        String ownerToken = getHorseOwnerToken();
+        Staff staff = createStaff("vis.staff@example.com", "Vis Staff", "VSF01");
+        Referee referee = createReferee("vis.ref@example.com", "Vis Referee", "VRF01");
+
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+
+        // Race 1: OPEN_FOR_ENTRY, currently open
+        Race race1 = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
+
+        // Race 2: SCHEDULED
+        Race race2 = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
+
+        MvcResult result = mockMvc.perform(get("/api/races/open")
+                        .header("Authorization", ownerToken))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String responseBody = result.getResponse().getContentAsString();
+        assertTrue(responseBody.contains(race1.getRaceName()));
+        assertFalse(responseBody.contains("\"raceId\":" + race2.getRaceId() + ","));
     }
 }

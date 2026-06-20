@@ -19,6 +19,9 @@ public class RaceMeeting {
     @Column(name = "meeting_id")
     private Long meetingId;
 
+    @Column(name = "meeting_name", nullable = false, length = 150)
+    private String meetingName;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "season_id", nullable = false)
     private Season season;

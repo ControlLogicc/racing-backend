@@ -1,8 +1,9 @@
 package com.solofounder.horseracing.model;
 
+import com.solofounder.horseracing.model.enums.RaceStatus;
+import com.solofounder.horseracing.model.converter.RaceStatusConverter;
 import jakarta.persistence.*;
 import lombok.*;
-
 import java.time.LocalDateTime;
 
 @Entity
@@ -43,8 +44,15 @@ public class Race {
     @Column(name = "scheduled_time")
     private LocalDateTime scheduledTime;
 
+    @Column(name = "registration_open_at")
+    private LocalDateTime registrationOpenAt;
+
+    @Column(name = "registration_close_at")
+    private LocalDateTime registrationCloseAt;
+
     @Column(name = "status", nullable = false, length = 25)
-    private String status;
+    @Convert(converter = RaceStatusConverter.class)
+    private RaceStatus status;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -57,8 +65,8 @@ public class Race {
         LocalDateTime now = LocalDateTime.now();
         this.createdAt = now;
         this.updatedAt = now;
-        if (this.status == null || this.status.isBlank()) {
-            this.status = "draft";
+        if (this.status == null) {
+            this.status = RaceStatus.DRAFT;
         }
     }
 

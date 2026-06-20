@@ -47,7 +47,8 @@ public class RaceMeetingService {
                 .season(season)
                 .racecourse(racecourse)
                 .meetingDate(request.getMeetingDate())
-                .status(normalizeStatus(request.getStatus()))
+                .meetingName(request.getMeetingName())
+                .status("scheduled")
                 .build();
         return toResponse(raceMeetingRepository.save(raceMeeting));
     }
@@ -60,7 +61,7 @@ public class RaceMeetingService {
         raceMeeting.setSeason(season);
         raceMeeting.setRacecourse(racecourse);
         raceMeeting.setMeetingDate(request.getMeetingDate());
-        raceMeeting.setStatus(normalizeStatus(request.getStatus()));
+        raceMeeting.setMeetingName(request.getMeetingName());
         return toResponse(raceMeetingRepository.save(raceMeeting));
     }
 
@@ -120,12 +121,12 @@ public class RaceMeetingService {
         Racecourse racecourse = raceMeeting.getRacecourse();
         return RaceMeetingResponse.builder()
                 .meetingId(raceMeeting.getMeetingId())
+                .meetingName(raceMeeting.getMeetingName())
                 .seasonId(season.getSeasonId())
                 .seasonName(season.getSeasonName())
                 .racecourseId(racecourse.getRacecourseId())
                 .racecourseName(racecourse.getRacecourseName())
                 .meetingDate(raceMeeting.getMeetingDate())
-                .status(raceMeeting.getStatus())
                 .createdAt(raceMeeting.getCreatedAt())
                 .build();
     }

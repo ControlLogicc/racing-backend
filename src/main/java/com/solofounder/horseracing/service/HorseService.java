@@ -1,6 +1,7 @@
 package com.solofounder.horseracing.service;
 
-import com.solofounder.horseracing.dto.horse.HorseRequest;
+import com.solofounder.horseracing.dto.horse.CreateHorseRequest;
+import com.solofounder.horseracing.dto.horse.UpdateHorseRequest;
 import com.solofounder.horseracing.dto.horse.HorseResponse;
 import com.solofounder.horseracing.model.Horse;
 import com.solofounder.horseracing.model.User;
@@ -25,7 +26,7 @@ import java.util.Set;
 public class HorseService {
 
     private static final Set<String> VALID_GENDERS = Set.of("M", "F");
-    private static final Set<String> VALID_STATUSES = Set.of("active", "injured", "retired", "suspended");
+    private static final Set<String> VALID_STATUSES = Set.of("ACTIVE", "INJURED", "RETIRED", "SUSPENDED");
 
     private final HorseRepository horseRepository;
     private final UserRepository userRepository;
@@ -46,28 +47,38 @@ public class HorseService {
         return toResponse(horse);
     }
 
-    public HorseResponse createOwnerHorse(HorseRequest request) {
+    public HorseResponse createOwnerHorse(CreateHorseRequest request) {
         User owner = getCurrentUser();
         requireRole(owner, Role.OWNER);
         Horse horse = Horse.builder()
                 .owner(owner)
                 .horseName(normalizeRequiredName(request.getHorseName()))
+                .color(normalizeRequired(request.getColor(), "Color is required"))
                 .age(validateAge(request.getAge()))
                 .gender(normalizeGender(request.getGender()))
-                .breed(trimToNull(request.getBreed()))
-                .currentScore(validateCurrentScore(request.getCurrentScore()))
-                .horseClass(validateHorseClass(request.getHorseClass()))
-                .status(normalizeHorseStatus(request.getStatus()))
+                .currentScore(BigDecimal.ZERO)
+                .horseClass((short) 5) // Default to Class 5
+                .healthNote(trimToNull(request.getHealthNote()))
+                .status("active") // Default to ACTIVE (stored as active)
                 .build();
         return toResponse(horseRepository.save(horse));
     }
 
-    public HorseResponse updateOwnerHorse(Long horseId, HorseRequest request) {
+    public HorseResponse updateOwnerHorse(Long horseId, UpdateHorseRequest request) {
         User owner = getCurrentUser();
         requireRole(owner, Role.OWNER);
         Horse horse = horseRepository.findByHorseIdAndOwnerUserId(horseId, owner.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Horse not found"));
-        updateHorseFields(horse, request);
+        
+        horse.setHorseName(normalizeRequiredName(request.getHorseName()));
+        horse.setColor(normalizeRequired(request.getColor(), "Color is required"));
+        horse.setAge(validateAge(request.getAge()));
+        horse.setGender(normalizeGender(request.getGender()));
+        horse.setHealthNote(trimToNull(request.getHealthNote()));
+        
+        // Translate status uppercase value from request to lowercase value for database
+        horse.setStatus(normalizeHorseStatus(request.getStatus()));
+        
         return toResponse(horseRepository.save(horse));
     }
 
@@ -89,9 +100,14 @@ public class HorseService {
         return toResponse(findHorse(horseId));
     }
 
-    public HorseResponse updateHorse(Long horseId, HorseRequest request) {
+    public HorseResponse updateHorse(Long horseId, UpdateHorseRequest request) {
         Horse horse = findHorse(horseId);
-        updateHorseFields(horse, request);
+        horse.setHorseName(normalizeRequiredName(request.getHorseName()));
+        horse.setColor(normalizeRequired(request.getColor(), "Color is required"));
+        horse.setAge(validateAge(request.getAge()));
+        horse.setGender(normalizeGender(request.getGender()));
+        horse.setHealthNote(trimToNull(request.getHealthNote()));
+        horse.setStatus(normalizeHorseStatus(request.getStatus()));
         return toResponse(horseRepository.save(horse));
     }
 
@@ -99,19 +115,34 @@ public class HorseService {
         deleteHorse(findHorse(horseId));
     }
 
+    // Classification helper method mapping score to horse class
+    public Short calculateHorseClass(BigDecimal currentScore) {
+        if (currentScore == null || currentScore.compareTo(BigDecimal.ZERO) < 0) {
+            return 5;
+        }
+
+        if (currentScore.compareTo(BigDecimal.valueOf(80)) >= 0) {
+            return 1;
+        }
+
+        if (currentScore.compareTo(BigDecimal.valueOf(60)) >= 0) {
+            return 2;
+        }
+
+        if (currentScore.compareTo(BigDecimal.valueOf(40)) >= 0) {
+            return 3;
+        }
+
+        if (currentScore.compareTo(BigDecimal.valueOf(20)) >= 0) {
+            return 4;
+        }
+
+        return 5;
+    }
+
     private Horse findHorse(Long horseId) {
         return horseRepository.findById(horseId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Horse not found"));
-    }
-
-    private void updateHorseFields(Horse horse, HorseRequest request) {
-        horse.setHorseName(normalizeRequiredName(request.getHorseName()));
-        horse.setAge(validateAge(request.getAge()));
-        horse.setGender(normalizeGender(request.getGender()));
-        horse.setBreed(trimToNull(request.getBreed()));
-        horse.setCurrentScore(validateCurrentScore(request.getCurrentScore()));
-        horse.setHorseClass(validateHorseClass(request.getHorseClass()));
-        horse.setStatus(normalizeHorseStatus(request.getStatus()));
     }
 
     private void deleteHorse(Horse horse) {
@@ -145,9 +176,17 @@ public class HorseService {
         return name;
     }
 
+    private String normalizeRequired(String value, String message) {
+        String trimmed = trimToNull(value);
+        if (trimmed == null) {
+            throw new IllegalArgumentException(message);
+        }
+        return trimmed;
+    }
+
     private Short validateAge(Short age) {
-        if (age != null && age < 0) {
-            throw new IllegalArgumentException("Horse age must be greater than or equal to 0");
+        if (age == null || age < 1 || age > 30) {
+            throw new IllegalArgumentException("Horse age must be between 1 and 30");
         }
         return age;
     }
@@ -155,7 +194,7 @@ public class HorseService {
     private String normalizeGender(String gender) {
         String normalized = trimToNull(gender);
         if (normalized == null) {
-            return null;
+            throw new IllegalArgumentException("Gender is required");
         }
         normalized = normalized.toUpperCase();
         if (!VALID_GENDERS.contains(normalized)) {
@@ -164,33 +203,16 @@ public class HorseService {
         return normalized;
     }
 
-    private BigDecimal validateCurrentScore(BigDecimal currentScore) {
-        if (currentScore != null && currentScore.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("Current score must be greater than or equal to 0");
-        }
-        return currentScore == null ? BigDecimal.ZERO : currentScore;
-    }
-
-    private Short validateHorseClass(Short horseClass) {
-        if (horseClass == null) {
-            return 5;
-        }
-        if (horseClass < 1 || horseClass > 5) {
-            throw new IllegalArgumentException("Horse class must be between 1 and 5");
-        }
-        return horseClass;
-    }
-
     private String normalizeHorseStatus(String status) {
         String normalized = trimToNull(status);
         if (normalized == null) {
             return "active";
         }
-        normalized = normalized.toLowerCase();
+        normalized = normalized.toUpperCase();
         if (!VALID_STATUSES.contains(normalized)) {
-            throw new IllegalArgumentException("Horse status must be active, injured, retired, or suspended");
+            throw new IllegalArgumentException("Horse status must be ACTIVE, INJURED, RETIRED, or SUSPENDED");
         }
-        return normalized;
+        return normalized.toLowerCase();
     }
 
     private String trimToNull(String value) {
@@ -207,14 +229,13 @@ public class HorseService {
                 .ownerId(owner.getUserId())
                 .ownerName(owner.getFullName())
                 .horseName(horse.getHorseName())
+                .color(horse.getColor())
                 .age(horse.getAge())
                 .gender(horse.getGender())
-                .breed(horse.getBreed())
                 .currentScore(horse.getCurrentScore())
                 .horseClass(horse.getHorseClass())
-                .status(horse.getStatus())
-                .createdAt(horse.getCreatedAt())
-                .updatedAt(horse.getUpdatedAt())
+                .healthNote(horse.getHealthNote())
+                .status(horse.getStatus() != null ? horse.getStatus().toUpperCase() : "ACTIVE") // Return status as uppercase
                 .build();
     }
 }
