@@ -1,11 +1,18 @@
 package com.solofounder.horseracing.service;
 
 import com.solofounder.horseracing.dto.staff.CreateStaffRequest;
+import com.solofounder.horseracing.dto.race.RaceResponse;
 import com.solofounder.horseracing.dto.staff.StaffResponse;
+import com.solofounder.horseracing.dto.staff.StaffRegistrationResponse;
 import com.solofounder.horseracing.dto.staff.UpdateStaffRequest;
+import com.solofounder.horseracing.model.Race;
+import com.solofounder.horseracing.model.RaceRegistration;
+import com.solofounder.horseracing.model.enums.RaceRegistrationStatus;
 import com.solofounder.horseracing.model.Staff;
 import com.solofounder.horseracing.model.User;
 import com.solofounder.horseracing.model.enums.Role;
+import com.solofounder.horseracing.repository.RaceRegistrationRepository;
+import com.solofounder.horseracing.repository.RaceRepository;
 import com.solofounder.horseracing.repository.StaffRepository;
 import com.solofounder.horseracing.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Set;
 
 @Service
@@ -28,13 +36,32 @@ public class StaffService {
 
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
+    private final RaceRepository raceRepository;
+    private final RaceRegistrationRepository raceRegistrationRepository;
 
     public StaffResponse getCurrentStaffProfile() {
         User user = getCurrentUser();
         requireRole(user, Role.STAFF);
-        Staff staff = staffRepository.findByUserUserId(user.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff profile not found"));
+        Staff staff = findCurrentStaffProfile(user);
         return toResponse(staff);
+    }
+
+    public List<RaceResponse> getCurrentStaffRaces() {
+        User user = getCurrentUser();
+        requireRole(user, Role.STAFF);
+        Staff staff = findCurrentStaffProfile(user);
+        return raceRepository.findByStaffStaffId(staff.getStaffId()).stream()
+                .map(this::toRaceResponse)
+                .toList();
+    }
+
+    public List<StaffRegistrationResponse> getCurrentStaffRegistrations() {
+        User user = getCurrentUser();
+        requireRole(user, Role.STAFF);
+        Staff staff = findCurrentStaffProfile(user);
+        return raceRegistrationRepository.findByRaceStaffStaffId(staff.getStaffId()).stream()
+                .map(this::toStaffRegistrationResponse)
+                .toList();
     }
 
     public StaffResponse createStaff(CreateStaffRequest request) {
@@ -79,6 +106,11 @@ public class StaffService {
 
     private Staff findStaff(Long staffId) {
         return staffRepository.findById(staffId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff profile not found"));
+    }
+
+    private Staff findCurrentStaffProfile(User user) {
+        return staffRepository.findByUserUserId(user.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff profile not found"));
     }
 
@@ -135,6 +167,53 @@ public class StaffService {
                 .department(staff.getDepartment())
                 .status(staff.getStatus())
                 .createdAt(staff.getCreatedAt())
+                .build();
+    }
+
+    private RaceResponse toRaceResponse(Race race) {
+        Staff staff = race.getStaff();
+        var referee = race.getReferee();
+        return RaceResponse.builder()
+                .raceId(race.getRaceId())
+                .meetingId(race.getRaceMeeting().getMeetingId())
+                .meetingName(race.getRaceMeeting().getMeetingName())
+                .meetingDate(race.getRaceMeeting().getMeetingDate())
+                .racecourseName(race.getRaceMeeting().getRacecourse().getRacecourseName())
+                .conditionId(race.getRaceCondition().getConditionId())
+                .conditionName(race.getRaceCondition().getConditionName())
+                .distanceMeters(race.getRaceCondition().getDistance())
+                .trackType(race.getRaceCondition().getTrackType())
+                .classRequirement(race.getRaceCondition().getClassRequirement())
+                .staffId(staff == null ? null : staff.getStaffId())
+                .staffName(staff == null ? null : staff.getUser().getFullName())
+                .refereeId(referee == null ? null : referee.getRefereeId())
+                .refereeName(referee == null ? null : referee.getUser().getFullName())
+                .raceName(race.getRaceName())
+                .raceNo(race.getRaceNo())
+                .scheduledTime(race.getScheduledTime())
+                .registrationOpenAt(race.getRegistrationOpenAt())
+                .registrationCloseAt(race.getRegistrationCloseAt())
+                .status(race.getStatus() != null ? race.getStatus().name() : null)
+                .createdAt(race.getCreatedAt())
+                .updatedAt(race.getUpdatedAt())
+                .build();
+    }
+
+    private StaffRegistrationResponse toStaffRegistrationResponse(RaceRegistration registration) {
+        boolean canRespond = registration.getStatus() == RaceRegistrationStatus.PENDING;
+        return StaffRegistrationResponse.builder()
+                .registrationId(registration.getRegistrationId())
+                .raceId(registration.getRace().getRaceId())
+                .raceName(registration.getRace().getRaceName())
+                .horseId(registration.getHorse().getHorseId())
+                .horseName(registration.getHorse().getHorseName())
+                .ownerId(registration.getSubmittedBy().getUserId())
+                .ownerName(registration.getSubmittedBy().getFullName())
+                .status(registration.getStatus() != null ? registration.getStatus().name() : null)
+                .submittedAt(registration.getSubmittedAt())
+                .createdAt(registration.getCreatedAt())
+                .canApprove(canRespond)
+                .canReject(canRespond)
                 .build();
     }
 }

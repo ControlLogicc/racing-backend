@@ -7,6 +7,7 @@ import java.util.List;
 
 public interface RaceRegistrationRepository extends JpaRepository<RaceRegistration, Long> {
     List<RaceRegistration> findByRaceRaceId(Long raceId);
+    List<RaceRegistration> findByRaceStaffStaffId(Long staffId);
     boolean existsByRaceRaceIdAndHorseHorseId(Long raceId, Long horseId);
     long countByRaceRaceIdAndStatus(Long raceId, RaceRegistrationStatus status);
 }

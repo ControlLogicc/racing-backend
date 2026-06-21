@@ -11,12 +11,19 @@ import com.solofounder.horseracing.dto.horse.UpdateHorseRequest;
 import com.solofounder.horseracing.dto.horse.HorseResponse;
 import com.solofounder.horseracing.dto.staff.CreateStaffRequest;
 import com.solofounder.horseracing.dto.staff.StaffResponse;
+import com.solofounder.horseracing.dto.staff.StaffRegistrationResponse;
 import com.solofounder.horseracing.dto.staff.UpdateStaffRequest;
+import com.solofounder.horseracing.dto.jockey.JockeyResponse;
+import com.solofounder.horseracing.dto.jockey.UpdateJockeyWeightRequest;
+import com.solofounder.horseracing.dto.race.RaceResponse;
+import com.solofounder.horseracing.dto.invitation.CreateInvitationRequest;
+import com.solofounder.horseracing.dto.invitation.InvitationResponse;
 import com.solofounder.horseracing.dto.referee.CreateRefereeRequest;
 import com.solofounder.horseracing.dto.referee.UpdateRefereeRequest;
 import com.solofounder.horseracing.dto.referee.RefereeResponse;
 import com.solofounder.horseracing.dto.registration.CreateRegistrationRequest;
 import com.solofounder.horseracing.dto.registration.RegistrationResponse;
+import com.solofounder.horseracing.model.enums.RaceInvitationStatus;
 import com.solofounder.horseracing.model.enums.RaceRegistrationStatus;
 import com.solofounder.horseracing.model.*;
 import com.solofounder.horseracing.model.enums.RaceStatus;
@@ -96,10 +103,16 @@ class HorsesRacingApplicationTests {
         private com.solofounder.horseracing.repository.StaffRepository staffRepository;
 
         @Autowired
+        private com.solofounder.horseracing.repository.JockeyRepository jockeyRepository;
+
+        @Autowired
         private com.solofounder.horseracing.repository.RefereeRepository refereeRepository;
 
         @Autowired
         private com.solofounder.horseracing.repository.RaceRepository raceRepository;
+
+        @Autowired
+        private com.solofounder.horseracing.repository.RaceInvitationRepository raceInvitationRepository;
 
         @Autowired
         private com.solofounder.horseracing.repository.RaceRegistrationRepository raceRegistrationRepository;
@@ -108,6 +121,7 @@ class HorsesRacingApplicationTests {
 
         @BeforeEach
         void cleanDatabase() {
+                raceInvitationRepository.deleteAll();
                 raceRegistrationRepository.deleteAll();
                 // Clean up test horses owned by test users to prevent foreign key errors
                 userRepository.findAll().stream()
@@ -123,6 +137,12 @@ class HorsesRacingApplicationTests {
                 // Clean up test users
                 userRepository.findAll().stream()
                                 .filter(u -> u.getEmail().endsWith("@example.com"))
+                                .forEach(this::deleteTestProfiles);
+                staffRepository.flush();
+                jockeyRepository.flush();
+                refereeRepository.flush();
+                userRepository.findAll().stream()
+                                .filter(u -> u.getEmail().endsWith("@example.com"))
                                 .forEach(userRepository::delete);
                 userRepository.flush();
 
@@ -133,8 +153,20 @@ class HorsesRacingApplicationTests {
                 }
                 userRepository.findAll().stream()
                                 .filter(u -> !preExistingUserIds.contains(u.getUserId()))
+                                .forEach(this::deleteTestProfiles);
+                staffRepository.flush();
+                jockeyRepository.flush();
+                refereeRepository.flush();
+                userRepository.findAll().stream()
+                                .filter(u -> !preExistingUserIds.contains(u.getUserId()))
                                 .forEach(userRepository::delete);
                 userRepository.flush();
+        }
+
+        private void deleteTestProfiles(User user) {
+                staffRepository.findByUserUserId(user.getUserId()).ifPresent(staffRepository::delete);
+                jockeyRepository.findByUserUserId(user.getUserId()).ifPresent(jockeyRepository::delete);
+                refereeRepository.findByUserUserId(user.getUserId()).ifPresent(refereeRepository::delete);
         }
 
         // Helper to get JWT token by logging in default admin (or registering a user)
@@ -1073,7 +1105,190 @@ class HorsesRacingApplicationTests {
                 assertEquals((short) 5, horseService.calculateHorseClass(BigDecimal.valueOf(-5)));
         }
 
+        // --- JOCKEY PROFILE MANAGEMENT TESTS ---
+
+        @Test
+        void testGetJockeysList() throws Exception {
+                String adminToken = getAdminToken();
+                Jockey jockey = createJockey("jockey.list@example.com", "Jockey List", BigDecimal.valueOf(52.5));
+
+                MvcResult result = mockMvc.perform(get("/api/jockeys")
+                                .header("Authorization", adminToken))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                JockeyResponse[] responses = objectMapper.readValue(result.getResponse().getContentAsString(), JockeyResponse[].class);
+                assertTrue(java.util.Arrays.stream(responses)
+                                .anyMatch(response -> response.getJockeyId().equals(jockey.getJockeyId())));
+        }
+
+        @Test
+        void testJockeyUpdatesOwnWeight() throws Exception {
+                Jockey jockey = createJockey("jockey.weight@example.com", "Jockey Weight", BigDecimal.valueOf(52.5));
+                String jockeyToken = getTokenFor(jockey.getUser());
+
+                UpdateJockeyWeightRequest request = UpdateJockeyWeightRequest.builder()
+                                .weight(BigDecimal.valueOf(53.0))
+                                .build();
+
+                MvcResult result = mockMvc.perform(put("/api/jockeys/" + jockey.getJockeyId() + "/weight")
+                                .header("Authorization", jockeyToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                JockeyResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), JockeyResponse.class);
+                assertEquals(jockey.getJockeyId(), response.getJockeyId());
+                assertEquals(0, BigDecimal.valueOf(53.0).compareTo(response.getWeight()));
+                assertEquals((short) 3, response.getExperienceYears());
+                assertEquals("available", response.getStatus());
+        }
+
+        @Test
+        void testUpdateJockeyWeightWithoutTokenFails() throws Exception {
+                Jockey jockey = createJockey("jockey.notoken@example.com", "Jockey No Token", BigDecimal.valueOf(52.5));
+
+                UpdateJockeyWeightRequest request = UpdateJockeyWeightRequest.builder()
+                                .weight(BigDecimal.valueOf(53.0))
+                                .build();
+
+                mockMvc.perform(put("/api/jockeys/" + jockey.getJockeyId() + "/weight")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void testOwnerCannotUpdateJockeyWeight() throws Exception {
+                Jockey jockey = createJockey("jockey.ownerforbidden@example.com", "Jockey Owner Forbidden", BigDecimal.valueOf(52.5));
+                String ownerToken = getHorseOwnerToken();
+
+                UpdateJockeyWeightRequest request = UpdateJockeyWeightRequest.builder()
+                                .weight(BigDecimal.valueOf(53.0))
+                                .build();
+
+                mockMvc.perform(put("/api/jockeys/" + jockey.getJockeyId() + "/weight")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void testJockeyCannotUpdateAnotherJockeyWeight() throws Exception {
+                Jockey jockeyA = createJockey("jockey.ownera@example.com", "Jockey Owner A", BigDecimal.valueOf(52.5));
+                Jockey jockeyB = createJockey("jockey.ownerb@example.com", "Jockey Owner B", BigDecimal.valueOf(54.0));
+                String jockeyAToken = getTokenFor(jockeyA.getUser());
+
+                UpdateJockeyWeightRequest request = UpdateJockeyWeightRequest.builder()
+                                .weight(BigDecimal.valueOf(55.0))
+                                .build();
+
+                mockMvc.perform(put("/api/jockeys/" + jockeyB.getJockeyId() + "/weight")
+                                .header("Authorization", jockeyAToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void testUpdateJockeyWeightNotFoundFails() throws Exception {
+                Jockey jockey = createJockey("jockey.notfound@example.com", "Jockey Not Found", BigDecimal.valueOf(52.5));
+                String jockeyToken = getTokenFor(jockey.getUser());
+
+                UpdateJockeyWeightRequest request = UpdateJockeyWeightRequest.builder()
+                                .weight(BigDecimal.valueOf(53.0))
+                                .build();
+
+                mockMvc.perform(put("/api/jockeys/999999999/weight")
+                                .header("Authorization", jockeyToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void testUpdateJockeyWeightInvalidFails() throws Exception {
+                Jockey jockey = createJockey("jockey.invalidweight@example.com", "Jockey Invalid Weight", BigDecimal.valueOf(52.5));
+                String jockeyToken = getTokenFor(jockey.getUser());
+
+                UpdateJockeyWeightRequest request = UpdateJockeyWeightRequest.builder()
+                                .weight(BigDecimal.valueOf(20.0))
+                                .build();
+
+                mockMvc.perform(put("/api/jockeys/" + jockey.getJockeyId() + "/weight")
+                                .header("Authorization", jockeyToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testJockeyAvailableRacesSuccess() throws Exception {
+                Jockey jockey = createJockey("jockey.available@example.com", "Jockey Available", BigDecimal.valueOf(52.5));
+                Staff staff = createStaff("jockey.avail.staff@example.com", "Jockey Available Staff", "JASF01");
+                Referee referee = createReferee("jockey.avail.ref@example.com", "Jockey Available Referee", "JARF01");
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
+
+                MvcResult result = mockMvc.perform(get("/api/jockeys/available-races")
+                                .header("Authorization", getTokenFor(jockey.getUser())))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                RaceResponse[] responses = objectMapper.readValue(result.getResponse().getContentAsString(), RaceResponse[].class);
+                assertTrue(java.util.Arrays.stream(responses)
+                                .anyMatch(response -> response.getRaceId().equals(race.getRaceId())));
+        }
+
+        @Test
+        void testJockeyAvailableRacesWithoutTokenFails() throws Exception {
+                mockMvc.perform(get("/api/jockeys/available-races"))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void testOwnerCannotGetJockeyAvailableRaces() throws Exception {
+                String ownerToken = getHorseOwnerToken();
+
+                mockMvc.perform(get("/api/jockeys/available-races")
+                                .header("Authorization", ownerToken))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void testJockeyAvailableRacesWithoutProfileFails() throws Exception {
+                User jockeyUser = createJockeyUser("jockey.noprofile@example.com", "Jockey No Profile");
+
+                mockMvc.perform(get("/api/jockeys/available-races")
+                                .header("Authorization", getTokenFor(jockeyUser)))
+                                .andExpect(status().isNotFound());
+        }
+
         // --- ADMIN RACE SETUP & LIFECYCLE TESTS ---
+
+        private User createJockeyUser(String email, String fullName) {
+                return userRepository.save(User.builder()
+                                .fullName(fullName)
+                                .email(email)
+                                .passwordHash(passwordEncoder.encode("123456"))
+                                .phone("0901234567")
+                                .role(Role.JOCKEY)
+                                .status(UserStatus.ACTIVE)
+                                .build());
+        }
+
+        private Jockey createJockey(String email, String fullName, BigDecimal weight) {
+                User user = createJockeyUser(email, fullName);
+                return jockeyRepository.save(Jockey.builder()
+                                .user(user)
+                                .weight(weight)
+                                .experienceYears((short) 3)
+                                .status("available")
+                                .createdAt(java.time.LocalDateTime.now())
+                                .build());
+        }
 
         private Staff createStaff(String email, String fullName, String staffCode) {
                 User user = userRepository.save(User.builder()
@@ -1735,6 +1950,132 @@ class HorsesRacingApplicationTests {
         }
 
         @Test
+        void testStaffGetOwnRacesSuccessAndFiltered() throws Exception {
+                Staff staffA = createStaff("staff.races.a@example.com", "Staff Races A", "SRCA01");
+                Staff staffB = createStaff("staff.races.b@example.com", "Staff Races B", "SRCB01");
+                Referee referee = createReferee("staff.races.ref@example.com", "Staff Races Ref", "SRRF01");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race raceA = setupRaceHierarchy(staffA, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race raceB = setupRaceHierarchy(staffB, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+
+                MvcResult result = mockMvc.perform(get("/api/staff/races")
+                                .header("Authorization", getTokenFor(staffA.getUser())))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                RaceResponse[] responses = objectMapper.readValue(result.getResponse().getContentAsString(), RaceResponse[].class);
+                assertTrue(java.util.Arrays.stream(responses).anyMatch(response -> response.getRaceId().equals(raceA.getRaceId())));
+                assertTrue(java.util.Arrays.stream(responses).noneMatch(response -> response.getRaceId().equals(raceB.getRaceId())));
+                assertTrue(java.util.Arrays.stream(responses).allMatch(response -> response.getStaffId().equals(staffA.getStaffId())));
+        }
+
+        @Test
+        void testStaffGetOwnRacesSecurity() throws Exception {
+                User owner = createOwnerUser("staff.races.owner@example.com", "Staff Races Owner");
+                User staffUser = userRepository.save(User.builder()
+                                .fullName("Staff Missing Profile")
+                                .email("staff.races.noprofile@example.com")
+                                .passwordHash(passwordEncoder.encode("123456"))
+                                .phone("0912345678")
+                                .role(Role.STAFF)
+                                .status(UserStatus.ACTIVE)
+                                .build());
+
+                mockMvc.perform(get("/api/staff/races"))
+                                .andExpect(status().isUnauthorized());
+
+                mockMvc.perform(get("/api/staff/races")
+                                .header("Authorization", getTokenFor(owner)))
+                                .andExpect(status().isForbidden());
+
+                mockMvc.perform(get("/api/staff/races")
+                                .header("Authorization", getTokenFor(staffUser)))
+                                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void testStaffGetOwnRegistrationsWithActionFlags() throws Exception {
+                Staff staffA = createStaff("staff.regs.a@example.com", "Staff Regs A", "SRGA01");
+                Staff staffB = createStaff("staff.regs.b@example.com", "Staff Regs B", "SRGB01");
+                Referee referee = createReferee("staff.regs.ref@example.com", "Staff Regs Ref", "SRGR01");
+                User owner = createOwnerUser("staff.regs.owner@example.com", "Staff Regs Owner");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race raceA = setupRaceHierarchy(staffA, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race raceB = setupRaceHierarchy(staffB, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Horse pendingHorse = createHorseForOwner(owner, "Staff Pending Horse", "active");
+                Horse approvedHorse = createHorseForOwner(owner, "Staff Approved Horse", "active");
+                Horse otherHorse = createHorseForOwner(owner, "Other Staff Horse", "active");
+
+                RaceRegistration pending = raceRegistrationRepository.save(RaceRegistration.builder()
+                                .race(raceA)
+                                .horse(pendingHorse)
+                                .submittedBy(owner)
+                                .status(RaceRegistrationStatus.PENDING)
+                                .submittedAt(now)
+                                .createdAt(now)
+                                .build());
+                RaceRegistration approved = raceRegistrationRepository.save(RaceRegistration.builder()
+                                .race(raceA)
+                                .horse(approvedHorse)
+                                .submittedBy(owner)
+                                .approvedBy(staffA)
+                                .status(RaceRegistrationStatus.APPROVED)
+                                .submittedAt(now.minusMinutes(5))
+                                .reviewedAt(now)
+                                .createdAt(now.minusMinutes(5))
+                                .build());
+                RaceRegistration otherStaff = raceRegistrationRepository.save(RaceRegistration.builder()
+                                .race(raceB)
+                                .horse(otherHorse)
+                                .submittedBy(owner)
+                                .status(RaceRegistrationStatus.PENDING)
+                                .submittedAt(now)
+                                .createdAt(now)
+                                .build());
+
+                MvcResult result = mockMvc.perform(get("/api/staff/registrations")
+                                .header("Authorization", getTokenFor(staffA.getUser())))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                StaffRegistrationResponse[] responses = objectMapper.readValue(result.getResponse().getContentAsString(), StaffRegistrationResponse[].class);
+                StaffRegistrationResponse pendingResponse = java.util.Arrays.stream(responses)
+                                .filter(response -> response.getRegistrationId().equals(pending.getRegistrationId()))
+                                .findFirst()
+                                .orElseThrow();
+                StaffRegistrationResponse approvedResponse = java.util.Arrays.stream(responses)
+                                .filter(response -> response.getRegistrationId().equals(approved.getRegistrationId()))
+                                .findFirst()
+                                .orElseThrow();
+
+                assertTrue(pendingResponse.getCanApprove());
+                assertTrue(pendingResponse.getCanReject());
+                assertFalse(approvedResponse.getCanApprove());
+                assertFalse(approvedResponse.getCanReject());
+                assertTrue(java.util.Arrays.stream(responses)
+                                .noneMatch(response -> response.getRegistrationId().equals(otherStaff.getRegistrationId())));
+        }
+
+        @Test
+        void testStaffGetOwnRegistrationsSecurity() throws Exception {
+                User owner = createOwnerUser("staff.regs.ownerrole@example.com", "Staff Regs Owner Role");
+                Jockey jockey = createJockey("staff.regs.jockey@example.com", "Staff Regs Jockey", BigDecimal.valueOf(52.5));
+
+                mockMvc.perform(get("/api/staff/registrations"))
+                                .andExpect(status().isUnauthorized());
+
+                mockMvc.perform(get("/api/staff/registrations")
+                                .header("Authorization", getTokenFor(owner)))
+                                .andExpect(status().isForbidden());
+
+                mockMvc.perform(get("/api/staff/registrations")
+                                .header("Authorization", getTokenFor(jockey.getUser())))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
         void testStaffApproveRegistrationSuccess() throws Exception {
                 String adminToken = getAdminToken();
                 Staff staff = createStaff("reg.app.staff@example.com", "Reg Staff", "RGSF09");
@@ -1933,6 +2274,258 @@ class HorsesRacingApplicationTests {
                 assertEquals(0L, entryCount);
         }
 
+        @Test
+        void testOwnerCreateInvitationSuccess() throws Exception {
+                User owner = createOwnerUser("invite.owner@example.com", "Invite Owner");
+                Jockey jockey = createJockey("invite.jockey@example.com", "Invite Jockey", BigDecimal.valueOf(52.5));
+                RaceRegistration registration = createApprovedRegistration(owner, "Invite Horse");
+
+                CreateInvitationRequest request = CreateInvitationRequest.builder()
+                                .raceRegistrationId(registration.getRegistrationId())
+                                .jockeyId(jockey.getJockeyId())
+                                .message("Please ride my horse")
+                                .build();
+
+                MvcResult result = mockMvc.perform(post("/api/invitations")
+                                .header("Authorization", getTokenFor(owner))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                InvitationResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), InvitationResponse.class);
+                assertNotNull(response.getInvitationId());
+                assertEquals(registration.getRegistrationId(), response.getRaceRegistrationId());
+                assertEquals(jockey.getJockeyId(), response.getJockeyId());
+                assertEquals("SENT", response.getStatus());
+        }
+
+        @Test
+        void testCreateInvitationWithoutTokenFails() throws Exception {
+                CreateInvitationRequest request = CreateInvitationRequest.builder()
+                                .raceRegistrationId(1L)
+                                .jockeyId(1L)
+                                .build();
+
+                mockMvc.perform(post("/api/invitations")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void testNonOwnerCreateInvitationFails() throws Exception {
+                User owner = createOwnerUser("invite.role.owner@example.com", "Invite Role Owner");
+                RaceRegistration registration = createApprovedRegistration(owner, "Invite Role Horse");
+                Jockey jockey = createJockey("invite.role.jockey@example.com", "Invite Role Jockey", BigDecimal.valueOf(52.5));
+                Staff staff = createStaff("invite.role.staff@example.com", "Invite Role Staff", "IRSF01");
+                User spectator = createSpectatorUser("invite.role.spectator@example.com", "Invite Role Spectator");
+
+                CreateInvitationRequest request = CreateInvitationRequest.builder()
+                                .raceRegistrationId(registration.getRegistrationId())
+                                .jockeyId(jockey.getJockeyId())
+                                .build();
+
+                mockMvc.perform(post("/api/invitations")
+                                .header("Authorization", getTokenFor(jockey.getUser()))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isForbidden());
+
+                mockMvc.perform(post("/api/invitations")
+                                .header("Authorization", getTokenFor(staff.getUser()))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isForbidden());
+
+                mockMvc.perform(post("/api/invitations")
+                                .header("Authorization", getTokenFor(spectator))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void testOwnerCannotInviteForOtherOwnerRegistration() throws Exception {
+                User ownerA = createOwnerUser("invite.ownera@example.com", "Invite Owner A");
+                User ownerB = createOwnerUser("invite.ownerb@example.com", "Invite Owner B");
+                RaceRegistration registration = createApprovedRegistration(ownerA, "Owner A Horse");
+                Jockey jockey = createJockey("invite.otherowner.jockey@example.com", "Other Owner Jockey", BigDecimal.valueOf(52.5));
+
+                CreateInvitationRequest request = CreateInvitationRequest.builder()
+                                .raceRegistrationId(registration.getRegistrationId())
+                                .jockeyId(jockey.getJockeyId())
+                                .build();
+
+                mockMvc.perform(post("/api/invitations")
+                                .header("Authorization", getTokenFor(ownerB))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void testCreateInvitationNotFoundCases() throws Exception {
+                User owner = createOwnerUser("invite.notfound.owner@example.com", "Invite NotFound Owner");
+                RaceRegistration registration = createApprovedRegistration(owner, "Not Found Horse");
+                Jockey jockey = createJockey("invite.notfound.jockey@example.com", "Invite NotFound Jockey", BigDecimal.valueOf(52.5));
+
+                CreateInvitationRequest missingRegistration = CreateInvitationRequest.builder()
+                                .raceRegistrationId(999999999L)
+                                .jockeyId(jockey.getJockeyId())
+                                .build();
+                mockMvc.perform(post("/api/invitations")
+                                .header("Authorization", getTokenFor(owner))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(missingRegistration)))
+                                .andExpect(status().isNotFound());
+
+                CreateInvitationRequest missingJockey = CreateInvitationRequest.builder()
+                                .raceRegistrationId(registration.getRegistrationId())
+                                .jockeyId(999999999L)
+                                .build();
+                mockMvc.perform(post("/api/invitations")
+                                .header("Authorization", getTokenFor(owner))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(missingJockey)))
+                                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void testDuplicateOpenInvitationRejected() throws Exception {
+                User owner = createOwnerUser("invite.dup.owner@example.com", "Invite Dup Owner");
+                RaceRegistration registration = createApprovedRegistration(owner, "Dup Horse");
+                Jockey jockey = createJockey("invite.dup.jockey@example.com", "Invite Dup Jockey", BigDecimal.valueOf(52.5));
+
+                CreateInvitationRequest request = CreateInvitationRequest.builder()
+                                .raceRegistrationId(registration.getRegistrationId())
+                                .jockeyId(jockey.getJockeyId())
+                                .build();
+
+                mockMvc.perform(post("/api/invitations")
+                                .header("Authorization", getTokenFor(owner))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk());
+
+                mockMvc.perform(post("/api/invitations")
+                                .header("Authorization", getTokenFor(owner))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isConflict());
+        }
+
+        @Test
+        void testOwnerAndJockeyGetOwnInvitations() throws Exception {
+                User ownerA = createOwnerUser("invite.list.ownera@example.com", "Invite List Owner A");
+                User ownerB = createOwnerUser("invite.list.ownerb@example.com", "Invite List Owner B");
+                Jockey jockey = createJockey("invite.list.jockey@example.com", "Invite List Jockey", BigDecimal.valueOf(52.5));
+                RaceInvitation invitationA = createInvitation(ownerA, jockey, "List Horse A", RaceInvitationStatus.SENT);
+                createInvitation(ownerB, jockey, "List Horse B", RaceInvitationStatus.SENT);
+
+                MvcResult ownerResult = mockMvc.perform(get("/api/invitations")
+                                .header("Authorization", getTokenFor(ownerA)))
+                                .andExpect(status().isOk())
+                                .andReturn();
+                InvitationResponse[] ownerResponses = objectMapper.readValue(ownerResult.getResponse().getContentAsString(), InvitationResponse[].class);
+                assertTrue(ownerResponses.length > 0);
+                assertTrue(java.util.Arrays.stream(ownerResponses).allMatch(response -> response.getOwnerId().equals(ownerA.getUserId())));
+
+                MvcResult jockeyResult = mockMvc.perform(get("/api/invitations")
+                                .header("Authorization", getTokenFor(jockey.getUser())))
+                                .andExpect(status().isOk())
+                                .andReturn();
+                InvitationResponse[] jockeyResponses = objectMapper.readValue(jockeyResult.getResponse().getContentAsString(), InvitationResponse[].class);
+                assertTrue(java.util.Arrays.stream(jockeyResponses)
+                                .anyMatch(response -> response.getInvitationId().equals(invitationA.getInvitationId())));
+                InvitationResponse sentInvitation = java.util.Arrays.stream(jockeyResponses)
+                                .filter(response -> response.getInvitationId().equals(invitationA.getInvitationId()))
+                                .findFirst()
+                                .orElseThrow();
+                assertTrue(sentInvitation.getCanAccept());
+                assertTrue(sentInvitation.getCanDecline());
+        }
+
+        @Test
+        void testJockeyAcceptAndDeclineOwnInvitation() throws Exception {
+                User owner = createOwnerUser("invite.respond.owner@example.com", "Invite Respond Owner");
+                Jockey jockey = createJockey("invite.respond.jockey@example.com", "Invite Respond Jockey", BigDecimal.valueOf(52.5));
+                RaceInvitation acceptInvitation = createInvitation(owner, jockey, "Accept Horse", RaceInvitationStatus.SENT);
+                RaceInvitation declineInvitation = createInvitation(owner, jockey, "Decline Horse", RaceInvitationStatus.SENT);
+
+                MvcResult acceptResult = mockMvc.perform(put("/api/invitations/" + acceptInvitation.getInvitationId() + "/accept")
+                                .header("Authorization", getTokenFor(jockey.getUser())))
+                                .andExpect(status().isOk())
+                                .andReturn();
+                InvitationResponse accepted = objectMapper.readValue(acceptResult.getResponse().getContentAsString(), InvitationResponse.class);
+                assertEquals("ACCEPTED", accepted.getStatus());
+                assertNotNull(accepted.getRespondedAt());
+                assertFalse(accepted.getCanAccept());
+                assertFalse(accepted.getCanDecline());
+
+                MvcResult declineResult = mockMvc.perform(put("/api/invitations/" + declineInvitation.getInvitationId() + "/decline")
+                                .header("Authorization", getTokenFor(jockey.getUser())))
+                                .andExpect(status().isOk())
+                                .andReturn();
+                InvitationResponse declined = objectMapper.readValue(declineResult.getResponse().getContentAsString(), InvitationResponse.class);
+                assertEquals("DECLINED", declined.getStatus());
+                assertNotNull(declined.getRespondedAt());
+                assertFalse(declined.getCanAccept());
+                assertFalse(declined.getCanDecline());
+        }
+
+        @Test
+        void testOtherJockeyCannotAcceptInvitation() throws Exception {
+                User owner = createOwnerUser("invite.otherj.owner@example.com", "Invite Other J Owner");
+                Jockey invitedJockey = createJockey("invite.otherj.invited@example.com", "Invited Jockey", BigDecimal.valueOf(52.5));
+                Jockey otherJockey = createJockey("invite.otherj.other@example.com", "Other Jockey", BigDecimal.valueOf(53.5));
+                RaceInvitation invitation = createInvitation(owner, invitedJockey, "Other J Horse", RaceInvitationStatus.SENT);
+
+                mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/accept")
+                                .header("Authorization", getTokenFor(otherJockey.getUser())))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void testAcceptInvitationNotFoundFails() throws Exception {
+                Jockey jockey = createJockey("invite.accept.notfound@example.com", "Accept NotFound Jockey", BigDecimal.valueOf(52.5));
+
+                mockMvc.perform(put("/api/invitations/999999999/accept")
+                                .header("Authorization", getTokenFor(jockey.getUser())))
+                                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void testAcceptOrDeclineAlreadyRespondedInvitationFails() throws Exception {
+                User owner = createOwnerUser("invite.responded.owner@example.com", "Invite Responded Owner");
+                Jockey jockey = createJockey("invite.responded.jockey@example.com", "Invite Responded Jockey", BigDecimal.valueOf(52.5));
+                RaceInvitation acceptedInvitation = createInvitation(owner, jockey, "Accepted Horse", RaceInvitationStatus.ACCEPTED);
+                RaceInvitation declinedInvitation = createInvitation(owner, jockey, "Declined Horse", RaceInvitationStatus.DECLINED);
+
+                mockMvc.perform(put("/api/invitations/" + declinedInvitation.getInvitationId() + "/accept")
+                                .header("Authorization", getTokenFor(jockey.getUser())))
+                                .andExpect(status().isConflict());
+
+                mockMvc.perform(put("/api/invitations/" + acceptedInvitation.getInvitationId() + "/decline")
+                                .header("Authorization", getTokenFor(jockey.getUser())))
+                                .andExpect(status().isConflict());
+        }
+
+        @Test
+        void testOwnerCannotAcceptOrDeclineInvitation() throws Exception {
+                User owner = createOwnerUser("invite.ownerrespond.owner@example.com", "Invite Owner Respond");
+                Jockey jockey = createJockey("invite.ownerrespond.jockey@example.com", "Invite Owner Respond Jockey", BigDecimal.valueOf(52.5));
+                RaceInvitation invitation = createInvitation(owner, jockey, "Owner Respond Horse", RaceInvitationStatus.SENT);
+
+                mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/accept")
+                                .header("Authorization", getTokenFor(owner)))
+                                .andExpect(status().isForbidden());
+
+                mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/decline")
+                                .header("Authorization", getTokenFor(owner)))
+                                .andExpect(status().isForbidden());
+        }
+
         private User createOwnerUser(String email, String fullName) {
                 return userRepository.save(User.builder()
                                 .fullName(fullName)
@@ -1941,6 +2534,50 @@ class HorsesRacingApplicationTests {
                                 .phone("0987654321")
                                 .role(Role.OWNER)
                                 .status(UserStatus.ACTIVE)
+                                .build());
+        }
+
+        private User createSpectatorUser(String email, String fullName) {
+                return userRepository.save(User.builder()
+                                .fullName(fullName)
+                                .email(email)
+                                .passwordHash(passwordEncoder.encode("123456"))
+                                .phone("0987654321")
+                                .role(Role.SPECTATOR)
+                                .status(UserStatus.ACTIVE)
+                                .build());
+        }
+
+        private RaceRegistration createApprovedRegistration(User owner, String horseName) {
+                Staff staff = createStaff(horseName.toLowerCase().replace(" ", ".") + ".staff@example.com", horseName + " Staff", "INV" + Math.abs(horseName.hashCode() % 10000));
+                Referee referee = createReferee(horseName.toLowerCase().replace(" ", ".") + ".ref@example.com", horseName + " Referee", "INV-RF-" + Math.abs(horseName.hashCode() % 10000));
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
+                Horse horse = createHorseForOwner(owner, horseName, "active");
+
+                return raceRegistrationRepository.save(RaceRegistration.builder()
+                                .race(race)
+                                .horse(horse)
+                                .submittedBy(owner)
+                                .approvedBy(staff)
+                                .status(RaceRegistrationStatus.APPROVED)
+                                .submittedAt(now.minusMinutes(5))
+                                .reviewedAt(now)
+                                .createdAt(now.minusMinutes(5))
+                                .build());
+        }
+
+        private RaceInvitation createInvitation(User owner, Jockey jockey, String horseName, RaceInvitationStatus status) {
+                RaceRegistration registration = createApprovedRegistration(owner, horseName);
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                return raceInvitationRepository.save(RaceInvitation.builder()
+                                .raceRegistration(registration)
+                                .jockey(jockey)
+                                .status(status)
+                                .message("Test invitation")
+                                .sentAt(now)
+                                .respondedAt(status == RaceInvitationStatus.ACCEPTED || status == RaceInvitationStatus.DECLINED ? now : null)
+                                .createdAt(now)
                                 .build());
         }
 
