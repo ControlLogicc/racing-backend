@@ -5,6 +5,7 @@ import com.solofounder.horseracing.dto.invitation.InvitationResponse;
 import com.solofounder.horseracing.service.RaceInvitationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -20,25 +21,30 @@ public class RaceInvitationController {
 
     @PostMapping
     @PreAuthorize("hasRole('OWNER')")
-    public ResponseEntity<InvitationResponse> createInvitation(@Valid @RequestBody CreateInvitationRequest request) {
-        return ResponseEntity.ok(raceInvitationService.createInvitation(request));
+    public ResponseEntity<InvitationResponse> createInvitation(
+            @Valid @RequestBody CreateInvitationRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(raceInvitationService.createInvitation(request));
     }
 
-    @GetMapping
-    @PreAuthorize("hasAnyRole('OWNER', 'JOCKEY', 'ADMIN', 'STAFF')")
-    public ResponseEntity<List<InvitationResponse>> getInvitations() {
-        return ResponseEntity.ok(raceInvitationService.getInvitations());
-    }
-
-    @PutMapping("/{id}/accept")
+    @GetMapping("/my")
     @PreAuthorize("hasRole('JOCKEY')")
-    public ResponseEntity<InvitationResponse> acceptInvitation(@PathVariable Long id) {
-        return ResponseEntity.ok(raceInvitationService.acceptInvitation(id));
+    public ResponseEntity<List<InvitationResponse>> getMyInvitations(
+            @RequestParam(required = false) String status) {
+        return ResponseEntity.ok(raceInvitationService.getMyInvitations(status));
     }
 
-    @PutMapping("/{id}/decline")
+    @PutMapping("/{invitationId}/accept")
     @PreAuthorize("hasRole('JOCKEY')")
-    public ResponseEntity<InvitationResponse> declineInvitation(@PathVariable Long id) {
-        return ResponseEntity.ok(raceInvitationService.declineInvitation(id));
+    public ResponseEntity<InvitationResponse> acceptInvitation(
+            @PathVariable Long invitationId) {
+        return ResponseEntity.ok(raceInvitationService.acceptInvitation(invitationId));
+    }
+
+    @PutMapping("/{invitationId}/decline")
+    @PreAuthorize("hasRole('JOCKEY')")
+    public ResponseEntity<InvitationResponse> declineInvitation(
+            @PathVariable Long invitationId) {
+        return ResponseEntity.ok(raceInvitationService.declineInvitation(invitationId));
     }
 }

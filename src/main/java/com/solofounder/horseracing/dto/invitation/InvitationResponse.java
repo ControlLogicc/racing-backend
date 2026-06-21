@@ -1,7 +1,6 @@
 package com.solofounder.horseracing.dto.invitation;
 
 import lombok.*;
-
 import java.time.LocalDateTime;
 
 @Data
@@ -10,7 +9,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class InvitationResponse {
     private Long invitationId;
-    private Long raceRegistrationId;
+    private Long registrationId;
     private Long raceId;
     private String raceName;
     private Long horseId;
@@ -20,10 +19,7 @@ public class InvitationResponse {
     private Long jockeyId;
     private String jockeyName;
     private String status;
-    private String message;
     private LocalDateTime sentAt;
     private LocalDateTime respondedAt;
-    private LocalDateTime createdAt;
-    private Boolean canAccept;
-    private Boolean canDecline;
+    private String message;
 }

@@ -9,8 +9,8 @@ import lombok.*;
 @AllArgsConstructor
 public class CreateInvitationRequest {
 
-    @NotNull(message = "Race registration id is required")
-    private Long raceRegistrationId;
+    @NotNull(message = "Registration id is required")
+    private Long registrationId;
 
     @NotNull(message = "Jockey id is required")
     private Long jockeyId;

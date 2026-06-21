@@ -1,10 +1,9 @@
 package com.solofounder.horseracing.model;
 
-import com.solofounder.horseracing.model.converter.RaceInvitationStatusConverter;
 import com.solofounder.horseracing.model.enums.RaceInvitationStatus;
+import com.solofounder.horseracing.model.converter.RaceInvitationStatusConverter;
 import jakarta.persistence.*;
 import lombok.*;
-
 import java.time.LocalDateTime;
 
 @Entity
@@ -22,15 +21,15 @@ public class RaceInvitation {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "registration_id", nullable = false)
-    private RaceRegistration raceRegistration;
+    private RaceRegistration registration;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "jockey_id", nullable = false)
     private Jockey jockey;
 
-    @Convert(converter = RaceInvitationStatusConverter.class)
     @Column(name = "invitation_status", nullable = false, length = 20)
-    private RaceInvitationStatus status;
+    @Convert(converter = RaceInvitationStatusConverter.class)
+    private RaceInvitationStatus invitationStatus;
 
     @Column(name = "sent_at")
     private LocalDateTime sentAt;
@@ -41,20 +40,18 @@ public class RaceInvitation {
     @Column(name = "message", length = 500)
     private String message;
 
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();
-        if (createdAt == null) {
-            createdAt = now;
+        this.createdAt = now;
+        if (this.sentAt == null) {
+            this.sentAt = now;
         }
-        if (sentAt == null) {
-            sentAt = now;
-        }
-        if (status == null) {
-            status = RaceInvitationStatus.SENT;
+        if (this.invitationStatus == null) {
+            this.invitationStatus = RaceInvitationStatus.SENT;
         }
     }
 }

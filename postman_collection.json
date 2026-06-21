@@ -1993,6 +1993,440 @@
         "description": "Expected 401 Unauthorized."
       },
       "response": []
+    },
+    {
+      "name": "48. OWNER A sends Invitation to JOCKEY A",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"registrationId\": {{registrationId}},\n  \"jockeyId\": {{jockeyId}},\n  \"message\": \"Ride my horse please\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/invitations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "invitations"
+          ]
+        },
+        "description": "Expected 201 Created. Save invitationId."
+      },
+      "response": []
+    },
+    {
+      "name": "49. JOCKEY A gets their Invitations",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jockeyToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/invitations/my",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "invitations",
+            "my"
+          ]
+        },
+        "description": "Expected 200 OK."
+      },
+      "response": []
+    },
+    {
+      "name": "50. JOCKEY A accepts Invitation",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jockeyToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/invitations/{{invitationId}}/accept",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "invitations",
+            "{{invitationId}}",
+            "accept"
+          ]
+        },
+        "description": "Expected 200 OK. Status becomes ACCEPTED."
+      },
+      "response": []
+    },
+    {
+      "name": "51. OWNER B sends Invitation for OWNER A's Registration (404/403)",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerBToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"registrationId\": {{registrationId}},\n  \"jockeyId\": {{jockeyId}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/invitations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "invitations"
+          ]
+        },
+        "description": "Expected 404/403."
+      },
+      "response": []
+    },
+    {
+      "name": "52. Send Invitation for PENDING Registration (400)",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"registrationId\": {{secondRegistrationId}},\n  \"jockeyId\": {{jockeyId}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/invitations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "invitations"
+          ]
+        },
+        "description": "Expected 400 Bad Request."
+      },
+      "response": []
+    },
+    {
+      "name": "53. Duplicate same Registration/Jockey Invitation (409)",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"registrationId\": {{registrationId}},\n  \"jockeyId\": {{jockeyId}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/invitations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "invitations"
+          ]
+        },
+        "description": "Expected 409 Conflict."
+      },
+      "response": []
+    },
+    {
+      "name": "54. JOCKEY B accepts JOCKEY A's Invitation (404/403)",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jockeyBToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/invitations/{{invitationId}}/accept",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "invitations",
+            "{{invitationId}}",
+            "accept"
+          ]
+        },
+        "description": "Expected 404/403."
+      },
+      "response": []
+    },
+    {
+      "name": "55. JOCKEY B declines JOCKEY A's Invitation (404/403)",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jockeyBToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/invitations/{{invitationId}}/decline",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "invitations",
+            "{{invitationId}}",
+            "decline"
+          ]
+        },
+        "description": "Expected 404/403."
+      },
+      "response": []
+    },
+    {
+      "name": "56. Accept an already ACCEPTED Invitation (400)",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jockeyToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/invitations/{{invitationId}}/accept",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "invitations",
+            "{{invitationId}}",
+            "accept"
+          ]
+        },
+        "description": "Expected 400 Bad Request."
+      },
+      "response": []
+    },
+    {
+      "name": "57. Decline an ACCEPTED Invitation (400)",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jockeyToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/invitations/{{invitationId}}/decline",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "invitations",
+            "{{invitationId}}",
+            "decline"
+          ]
+        },
+        "description": "Expected 400 Bad Request."
+      },
+      "response": []
+    },
+    {
+      "name": "58. OWNER calls accept endpoint (403)",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/invitations/{{invitationId}}/accept",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "invitations",
+            "{{invitationId}}",
+            "accept"
+          ]
+        },
+        "description": "Expected 403 Forbidden."
+      },
+      "response": []
+    },
+    {
+      "name": "59. JOCKEY calls create Invitation endpoint (403)",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jockeyToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"registrationId\": {{registrationId}},\n  \"jockeyId\": {{jockeyId}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/invitations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "invitations"
+          ]
+        },
+        "description": "Expected 403 Forbidden."
+      },
+      "response": []
+    },
+    {
+      "name": "60. Invitation No-token requests (401)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"registrationId\": {{registrationId}},\n  \"jockeyId\": {{jockeyId}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/invitations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "invitations"
+          ]
+        },
+        "description": "Expected 401 Unauthorized."
+      },
+      "response": []
     }
   ],
   "variable": [
@@ -2082,6 +2516,22 @@
     },
     {
       "key": "secondRegistrationId",
+      "value": ""
+    },
+    {
+      "key": "jockeyBToken",
+      "value": ""
+    },
+    {
+      "key": "jockeyBId",
+      "value": ""
+    },
+    {
+      "key": "invitationId",
+      "value": ""
+    },
+    {
+      "key": "secondInvitationId",
       "value": ""
     }
   ]

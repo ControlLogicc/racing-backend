@@ -12,18 +12,7 @@ public class RaceInvitationStatusConverter implements AttributeConverter<RaceInv
         if (status == null) {
             return null;
         }
-        switch (status) {
-            case SENT:
-                return "sent";
-            case PENDING:
-                return "pending_response";
-            case ACCEPTED:
-                return "accepted";
-            case DECLINED:
-                return "declined";
-            default:
-                throw new IllegalArgumentException("Unknown RaceInvitationStatus: " + status);
-        }
+        return status.name().toLowerCase();
     }
 
     @Override
@@ -31,23 +20,12 @@ public class RaceInvitationStatusConverter implements AttributeConverter<RaceInv
         if (dbData == null) {
             return null;
         }
-        String normalized = dbData.trim().toLowerCase();
-        switch (normalized) {
-            case "sent":
-                return RaceInvitationStatus.SENT;
-            case "pending":
-            case "pending_response":
-            case "draft":
-                return RaceInvitationStatus.PENDING;
-            case "accepted":
-            case "used":
-                return RaceInvitationStatus.ACCEPTED;
-            case "declined":
-            case "cancelled":
-            case "expired":
-                return RaceInvitationStatus.DECLINED;
-            default:
-                throw new IllegalArgumentException("Unknown database value for RaceInvitationStatus: " + dbData);
+        String trimmed = dbData.trim();
+        for (RaceInvitationStatus s : RaceInvitationStatus.values()) {
+            if (s.name().equalsIgnoreCase(trimmed)) {
+                return s;
+            }
         }
+        throw new IllegalArgumentException("Unknown database value for RaceInvitationStatus: " + dbData);
     }
 }

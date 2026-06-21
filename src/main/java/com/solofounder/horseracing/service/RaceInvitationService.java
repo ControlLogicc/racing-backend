@@ -5,14 +5,13 @@ import com.solofounder.horseracing.dto.invitation.InvitationResponse;
 import com.solofounder.horseracing.model.*;
 import com.solofounder.horseracing.model.enums.RaceInvitationStatus;
 import com.solofounder.horseracing.model.enums.RaceRegistrationStatus;
+import com.solofounder.horseracing.model.enums.RaceStatus;
 import com.solofounder.horseracing.model.enums.Role;
-import com.solofounder.horseracing.repository.JockeyRepository;
-import com.solofounder.horseracing.repository.RaceInvitationRepository;
-import com.solofounder.horseracing.repository.RaceRegistrationRepository;
-import com.solofounder.horseracing.repository.StaffRepository;
-import com.solofounder.horseracing.repository.UserRepository;
+import com.solofounder.horseracing.model.enums.UserStatus;
+import com.solofounder.horseracing.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -20,121 +19,206 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class RaceInvitationService {
 
-    private static final Set<RaceInvitationStatus> OPEN_INVITATION_STATUSES =
-            Set.of(RaceInvitationStatus.SENT, RaceInvitationStatus.PENDING);
-
     private final RaceInvitationRepository raceInvitationRepository;
     private final RaceRegistrationRepository raceRegistrationRepository;
     private final JockeyRepository jockeyRepository;
-    private final StaffRepository staffRepository;
     private final UserRepository userRepository;
-    private final RaceService raceService;
+    private final JdbcTemplate jdbcTemplate;
 
     public InvitationResponse createInvitation(CreateInvitationRequest request) {
-        User owner = getCurrentUser();
-        requireRole(owner, Role.OWNER);
+        User currentUser = getCurrentUser();
+        requireRole(currentUser, Role.OWNER);
 
-        RaceRegistration registration = raceRegistrationRepository.findById(request.getRaceRegistrationId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race registration not found"));
+        RaceRegistration registration = raceRegistrationRepository.findById(request.getRegistrationId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Registration not found"));
+
+        // Registration status must be APPROVED
+        if (registration.getStatus() != RaceRegistrationStatus.APPROVED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Registration is not APPROVED");
+        }
+
+        // Authenticated Owner must own the Horse in the Registration
+        Horse horse = registration.getHorse();
+        if (horse == null || horse.getOwner() == null || !horse.getOwner().getUserId().equals(currentUser.getUserId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Registration not found"); // 404 convention
+        }
+
+        // Validate Race status
+        Race race = registration.getRace();
+        if (race == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Race not found");
+        }
+        if (race.getStatus() == RaceStatus.CANCELLED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race is cancelled");
+        }
+        if (race.getStatus() == RaceStatus.RUNNING || race.getStatus() == RaceStatus.RESULT_PENDING || race.getStatus() == RaceStatus.OFFICIAL) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race no longer accepts Jockey assignment");
+        }
+
+        // Check if registration already has an Entry (via native database query)
+        Integer entryCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM dbo.race_entry WHERE registration_id = ?",
+                Integer.class,
+                registration.getRegistrationId()
+        );
+        if (entryCount != null && entryCount > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Registration already has a race entry");
+        }
+
+        // Check if Registration already has an ACCEPTED or USED invitation
+        boolean hasAcceptedOrUsed = raceInvitationRepository.existsByRegistrationRegistrationIdAndInvitationStatus(
+                registration.getRegistrationId(), RaceInvitationStatus.ACCEPTED) ||
+                raceInvitationRepository.existsByRegistrationRegistrationIdAndInvitationStatus(
+                registration.getRegistrationId(), RaceInvitationStatus.USED);
+        if (hasAcceptedOrUsed) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Registration already has an ACCEPTED invitation");
+        }
+
+        // Load and validate Jockey
         Jockey jockey = jockeyRepository.findById(request.getJockeyId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey not found"));
 
-        if (!registration.getSubmittedBy().getUserId().equals(owner.getUserId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
-        }
-        if (registration.getStatus() != RaceRegistrationStatus.APPROVED) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race registration must be approved before inviting jockey");
-        }
-        if (!raceService.isOpenForRegistration(registration.getRace(), LocalDateTime.now())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race is not open for registration");
-        }
-        if (raceInvitationRepository.existsByRaceRegistrationRegistrationIdAndJockeyJockeyIdAndStatusIn(
-                registration.getRegistrationId(), jockey.getJockeyId(), OPEN_INVITATION_STATUSES)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Invitation already exists for this registration and jockey");
-        }
-        if (raceInvitationRepository.existsByRaceRegistrationRegistrationIdAndStatus(
-                registration.getRegistrationId(), RaceInvitationStatus.ACCEPTED)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Race registration already has an accepted invitation");
+        if (jockey.getUser() == null || jockey.getUser().getRole() != Role.JOCKEY) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Jockey profile");
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        if (jockey.getUser().getStatus() != UserStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Jockey account is not active");
+        }
+
+        // Check if this Jockey has already been invited for this Registration in active status
+        boolean alreadyInvited = raceInvitationRepository.existsByRegistrationRegistrationIdAndJockeyJockeyIdAndInvitationStatusIn(
+                registration.getRegistrationId(),
+                jockey.getJockeyId(),
+                Arrays.asList(RaceInvitationStatus.SENT, RaceInvitationStatus.ACCEPTED, RaceInvitationStatus.USED)
+        );
+        if (alreadyInvited) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Jockey has already been invited for this registration");
+        }
+
         RaceInvitation invitation = RaceInvitation.builder()
-                .raceRegistration(registration)
+                .registration(registration)
                 .jockey(jockey)
-                .status(RaceInvitationStatus.SENT)
-                .message(normalizeMessage(request.getMessage()))
-                .sentAt(now)
-                .createdAt(now)
+                .invitationStatus(RaceInvitationStatus.SENT)
+                .sentAt(LocalDateTime.now())
+                .message(request.getMessage())
                 .build();
+
         return toResponse(raceInvitationRepository.save(invitation));
     }
 
-    public List<InvitationResponse> getInvitations() {
+    @Transactional(readOnly = true)
+    public List<InvitationResponse> getMyInvitations(String statusStr) {
         User currentUser = getCurrentUser();
-        if (currentUser.getRole() == Role.OWNER) {
-            return raceInvitationRepository.findByRaceRegistrationSubmittedByUserId(currentUser.getUserId()).stream()
-                    .map(this::toResponse)
-                    .toList();
+        requireRole(currentUser, Role.JOCKEY);
+
+        Jockey jockey = jockeyRepository.findByUserUserId(currentUser.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey profile not found"));
+
+        List<RaceInvitation> invitations;
+        if (statusStr != null && !statusStr.isBlank()) {
+            try {
+                RaceInvitationStatus status = RaceInvitationStatus.valueOf(statusStr.toUpperCase());
+                invitations = raceInvitationRepository.findByJockeyUserUserIdAndInvitationStatus(currentUser.getUserId(), status);
+            } catch (IllegalArgumentException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status filter");
+            }
+        } else {
+            invitations = raceInvitationRepository.findByJockeyUserUserId(currentUser.getUserId());
         }
-        if (currentUser.getRole() == Role.JOCKEY) {
-            Jockey jockey = jockeyRepository.findByUserUserId(currentUser.getUserId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey profile not found"));
-            return raceInvitationRepository.findByJockeyJockeyId(jockey.getJockeyId()).stream()
-                    .map(this::toResponse)
-                    .toList();
-        }
-        if (currentUser.getRole() == Role.ADMIN) {
-            return raceInvitationRepository.findAll().stream()
-                    .map(this::toResponse)
-                    .toList();
-        }
-        if (currentUser.getRole() == Role.STAFF) {
-            Staff staff = staffRepository.findByUserUserId(currentUser.getUserId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Staff profile not found"));
-            return raceInvitationRepository.findAll().stream()
-                    .filter(invitation -> {
-                        Staff raceStaff = invitation.getRaceRegistration().getRace().getStaff();
-                        return raceStaff != null && raceStaff.getStaffId().equals(staff.getStaffId());
-                    })
-                    .map(this::toResponse)
-                    .toList();
-        }
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+
+        return invitations.stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     public InvitationResponse acceptInvitation(Long invitationId) {
-        return respondToInvitation(invitationId, RaceInvitationStatus.ACCEPTED);
-    }
-
-    public InvitationResponse declineInvitation(Long invitationId) {
-        return respondToInvitation(invitationId, RaceInvitationStatus.DECLINED);
-    }
-
-    private InvitationResponse respondToInvitation(Long invitationId, RaceInvitationStatus newStatus) {
         User currentUser = getCurrentUser();
         requireRole(currentUser, Role.JOCKEY);
+
         Jockey jockey = jockeyRepository.findByUserUserId(currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey profile not found"));
+
         RaceInvitation invitation = raceInvitationRepository.findById(invitationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found"));
 
+        // Ownership rule: invitation.jockey must match the authenticated Jockey
         if (!invitation.getJockey().getJockeyId().equals(jockey.getJockeyId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
-        }
-        if (!OPEN_INVITATION_STATUSES.contains(invitation.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Invitation has already been responded to");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found"); // 404 convention
         }
 
-        invitation.setStatus(newStatus);
+        if (invitation.getInvitationStatus() != RaceInvitationStatus.SENT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation is not in SENT status");
+        }
+
+        RaceRegistration registration = invitation.getRegistration();
+        if (registration == null || registration.getStatus() != RaceRegistrationStatus.APPROVED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Registration is not APPROVED");
+        }
+
+        Race race = registration.getRace();
+        if (race == null || race.getStatus() == RaceStatus.CANCELLED ||
+            race.getStatus() == RaceStatus.RUNNING ||
+            race.getStatus() == RaceStatus.RESULT_PENDING ||
+            race.getStatus() == RaceStatus.OFFICIAL) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race is not in valid status");
+        }
+
+        // Check if registration already has an Entry (via native database query)
+        Integer entryCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM dbo.race_entry WHERE registration_id = ?",
+                Integer.class,
+                registration.getRegistrationId()
+        );
+        if (entryCount != null && entryCount > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Registration already has a race entry");
+        }
+
+        // Check if another invitation for the same registration is already ACCEPTED or USED
+        boolean hasAcceptedOrUsed = raceInvitationRepository.existsByRegistrationRegistrationIdAndInvitationStatus(
+                registration.getRegistrationId(), RaceInvitationStatus.ACCEPTED) ||
+                raceInvitationRepository.existsByRegistrationRegistrationIdAndInvitationStatus(
+                registration.getRegistrationId(), RaceInvitationStatus.USED);
+        if (hasAcceptedOrUsed) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Another invitation for this registration is already accepted");
+        }
+
+        invitation.setInvitationStatus(RaceInvitationStatus.ACCEPTED);
         invitation.setRespondedAt(LocalDateTime.now());
+
+        return toResponse(raceInvitationRepository.save(invitation));
+    }
+
+    public InvitationResponse declineInvitation(Long invitationId) {
+        User currentUser = getCurrentUser();
+        requireRole(currentUser, Role.JOCKEY);
+
+        Jockey jockey = jockeyRepository.findByUserUserId(currentUser.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey profile not found"));
+
+        RaceInvitation invitation = raceInvitationRepository.findById(invitationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found"));
+
+        // Ownership rule: invitation.jockey must match the authenticated Jockey
+        if (!invitation.getJockey().getJockeyId().equals(jockey.getJockeyId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found"); // 404 convention
+        }
+
+        if (invitation.getInvitationStatus() != RaceInvitationStatus.SENT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation is not in SENT status");
+        }
+
+        invitation.setInvitationStatus(RaceInvitationStatus.DECLINED);
+        invitation.setRespondedAt(LocalDateTime.now());
+
         return toResponse(raceInvitationRepository.save(invitation));
     }
 
@@ -153,43 +237,22 @@ public class RaceInvitationService {
         }
     }
 
-    private String normalizeMessage(String message) {
-        if (message == null || message.trim().isEmpty()) {
-            return null;
-        }
-        String normalized = message.trim();
-        if (normalized.length() > 500) {
-            throw new IllegalArgumentException("Message must be at most 500 characters");
-        }
-        return normalized;
-    }
-
     private InvitationResponse toResponse(RaceInvitation invitation) {
-        RaceRegistration registration = invitation.getRaceRegistration();
-        Race race = registration.getRace();
-        Horse horse = registration.getHorse();
-        User owner = registration.getSubmittedBy();
-        Jockey jockey = invitation.getJockey();
-        User jockeyUser = jockey.getUser();
-        boolean canRespond = OPEN_INVITATION_STATUSES.contains(invitation.getStatus());
         return InvitationResponse.builder()
                 .invitationId(invitation.getInvitationId())
-                .raceRegistrationId(registration.getRegistrationId())
-                .raceId(race.getRaceId())
-                .raceName(race.getRaceName())
-                .horseId(horse.getHorseId())
-                .horseName(horse.getHorseName())
-                .ownerId(owner.getUserId())
-                .ownerName(owner.getFullName())
-                .jockeyId(jockey.getJockeyId())
-                .jockeyName(jockeyUser.getFullName())
-                .status(invitation.getStatus() != null ? invitation.getStatus().name() : null)
-                .message(invitation.getMessage())
+                .registrationId(invitation.getRegistration().getRegistrationId())
+                .raceId(invitation.getRegistration().getRace().getRaceId())
+                .raceName(invitation.getRegistration().getRace().getRaceName())
+                .horseId(invitation.getRegistration().getHorse().getHorseId())
+                .horseName(invitation.getRegistration().getHorse().getHorseName())
+                .ownerId(invitation.getRegistration().getHorse().getOwner().getUserId())
+                .ownerName(invitation.getRegistration().getHorse().getOwner().getFullName())
+                .jockeyId(invitation.getJockey().getJockeyId())
+                .jockeyName(invitation.getJockey().getUser().getFullName())
+                .status(invitation.getInvitationStatus().name())
                 .sentAt(invitation.getSentAt())
                 .respondedAt(invitation.getRespondedAt())
-                .createdAt(invitation.getCreatedAt())
-                .canAccept(canRespond)
-                .canDecline(canRespond)
+                .message(invitation.getMessage())
                 .build();
     }
 }

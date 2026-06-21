@@ -1,8 +1,12 @@
 package com.solofounder.horseracing.model.enums;
 
 public enum RaceInvitationStatus {
+    DRAFT,
     SENT,
-    PENDING,
+    PENDING_RESPONSE,
     ACCEPTED,
-    DECLINED
+    DECLINED,
+    CANCELLED,
+    EXPIRED,
+    USED
 }
