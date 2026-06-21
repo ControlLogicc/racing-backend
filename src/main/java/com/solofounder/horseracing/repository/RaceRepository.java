@@ -12,6 +12,8 @@ import com.solofounder.horseracing.model.enums.RaceStatus;
 public interface RaceRepository extends JpaRepository<Race, Long> {
     List<Race> findByStatus(RaceStatus status);
 
+    List<Race> findByStaffStaffId(Long staffId);
+
     @Query(value = "SELECT COUNT(*) FROM dbo.race_registration WHERE race_id = :raceId", nativeQuery = true)
     long countRaceRegistrations(@Param("raceId") Long raceId);
 

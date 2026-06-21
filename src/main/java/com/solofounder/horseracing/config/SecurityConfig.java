@@ -45,6 +45,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/race-management/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/referees/**").authenticated()
                         .requestMatchers("/api/registrations/**").authenticated()
+                        .requestMatchers("/api/invitations/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session

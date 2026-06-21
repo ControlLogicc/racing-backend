@@ -12,7 +12,16 @@ public class RaceRegistrationStatusConverter implements AttributeConverter<RaceR
         if (status == null) {
             return null;
         }
-        return status.name().toLowerCase();
+        switch (status) {
+            case PENDING:
+                return "pending_review";
+            case APPROVED:
+                return "approved";
+            case REJECTED:
+                return "rejected";
+            default:
+                throw new IllegalArgumentException("Unknown RaceRegistrationStatus: " + status);
+        }
     }
 
     @Override
@@ -20,12 +29,21 @@ public class RaceRegistrationStatusConverter implements AttributeConverter<RaceR
         if (dbData == null) {
             return null;
         }
-        String trimmed = dbData.trim();
-        for (RaceRegistrationStatus s : RaceRegistrationStatus.values()) {
-            if (s.name().equalsIgnoreCase(trimmed)) {
-                return s;
-            }
+        String trimmed = dbData.trim().toLowerCase();
+        switch (trimmed) {
+            case "pending":
+            case "pending_review":
+            case "submitted":
+            case "draft":
+                return RaceRegistrationStatus.PENDING;
+            case "approved":
+            case "converted_to_entry":
+                return RaceRegistrationStatus.APPROVED;
+            case "rejected":
+            case "withdrawn":
+                return RaceRegistrationStatus.REJECTED;
+            default:
+                throw new IllegalArgumentException("Unknown database value for RaceRegistrationStatus: " + dbData);
         }
-        throw new IllegalArgumentException("Unknown database value for RaceRegistrationStatus: " + dbData);
     }
 }

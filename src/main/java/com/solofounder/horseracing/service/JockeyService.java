@@ -3,6 +3,8 @@ package com.solofounder.horseracing.service;
 import com.solofounder.horseracing.dto.jockey.CreateJockeyRequest;
 import com.solofounder.horseracing.dto.jockey.JockeyResponse;
 import com.solofounder.horseracing.dto.jockey.UpdateJockeyRequest;
+import com.solofounder.horseracing.dto.jockey.UpdateJockeyWeightRequest;
+import com.solofounder.horseracing.dto.race.RaceResponse;
 import com.solofounder.horseracing.model.Jockey;
 import com.solofounder.horseracing.model.User;
 import com.solofounder.horseracing.model.enums.Role;
@@ -29,6 +31,7 @@ public class JockeyService {
 
     private final JockeyRepository jockeyRepository;
     private final UserRepository userRepository;
+    private final RaceService raceService;
 
     public List<JockeyResponse> getAllJockeys() {
         return jockeyRepository.findAll().stream()
@@ -91,6 +94,29 @@ public class JockeyService {
         return toResponse(jockeyRepository.save(jockey));
     }
 
+    public JockeyResponse updateOwnWeight(Long jockeyId, UpdateJockeyWeightRequest request) {
+        Jockey targetJockey = findJockey(jockeyId);
+        User user = getCurrentUser();
+        requireRole(user, Role.JOCKEY);
+        Jockey currentJockey = jockeyRepository.findByUserUserId(user.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey profile not found"));
+
+        if (!targetJockey.getJockeyId().equals(currentJockey.getJockeyId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+
+        targetJockey.setWeight(validateRequiredWeight(request.getWeight()));
+        return toResponse(jockeyRepository.save(targetJockey));
+    }
+
+    public List<RaceResponse> getAvailableRacesForCurrentJockey() {
+        User user = getCurrentUser();
+        requireRole(user, Role.JOCKEY);
+        jockeyRepository.findByUserUserId(user.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey profile not found"));
+        return raceService.getOpenRaces();
+    }
+
     private Jockey findJockey(Long jockeyId) {
         return jockeyRepository.findById(jockeyId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey not found"));
@@ -120,6 +146,16 @@ public class JockeyService {
     private BigDecimal validateWeight(BigDecimal weight) {
         if (weight != null && weight.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Weight must be greater than or equal to 0");
+        }
+        return weight;
+    }
+
+    private BigDecimal validateRequiredWeight(BigDecimal weight) {
+        if (weight == null) {
+            throw new IllegalArgumentException("Weight is required");
+        }
+        if (weight.compareTo(BigDecimal.valueOf(30)) < 0 || weight.compareTo(BigDecimal.valueOf(80)) > 0) {
+            throw new IllegalArgumentException("Weight must be between 30 and 80");
         }
         return weight;
     }
