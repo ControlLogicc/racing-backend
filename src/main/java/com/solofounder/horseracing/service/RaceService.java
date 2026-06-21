@@ -35,11 +35,19 @@ public class RaceService {
                 .toList();
     }
 
+    public boolean isOpenForRegistration(Race race, LocalDateTime now) {
+        return race != null
+                && race.getStatus() == RaceStatus.OPEN_FOR_ENTRY
+                && race.getRegistrationOpenAt() != null
+                && race.getRegistrationCloseAt() != null
+                && !now.isBefore(race.getRegistrationOpenAt())
+                && !now.isAfter(race.getRegistrationCloseAt());
+    }
+
     public List<RaceResponse> getOpenRaces() {
         LocalDateTime now = LocalDateTime.now();
         return raceRepository.findByStatus(RaceStatus.OPEN_FOR_ENTRY).stream()
-                .filter(r -> r.getRegistrationOpenAt() != null && !r.getRegistrationOpenAt().isAfter(now))
-                .filter(r -> r.getRegistrationCloseAt() != null && !r.getRegistrationCloseAt().isBefore(now))
+                .filter(r -> isOpenForRegistration(r, now))
                 .map(this::toResponse)
                 .toList();
     }

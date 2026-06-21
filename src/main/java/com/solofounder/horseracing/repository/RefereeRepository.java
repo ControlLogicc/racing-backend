@@ -6,4 +6,7 @@ import java.util.Optional;
 
 public interface RefereeRepository extends JpaRepository<Referee, Long> {
     Optional<Referee> findByUserUserId(Long userId);
+    boolean existsByUserUserId(Long userId);
+    boolean existsByLicenseNo(String licenseNo);
+    boolean existsByLicenseNoAndRefereeIdNot(String licenseNo, Long refereeId);
 }
