@@ -2573,7 +2573,7 @@ class HorsesRacingApplicationTests {
                 return raceInvitationRepository.save(RaceInvitation.builder()
                                 .raceRegistration(registration)
                                 .jockey(jockey)
-                                .status(status)
+                                .invitationStatus(status)
                                 .message("Test invitation")
                                 .sentAt(now)
                                 .respondedAt(status == RaceInvitationStatus.ACCEPTED || status == RaceInvitationStatus.DECLINED ? now : null)

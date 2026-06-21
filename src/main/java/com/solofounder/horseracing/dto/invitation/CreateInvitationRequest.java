@@ -10,7 +10,7 @@ import lombok.*;
 public class CreateInvitationRequest {
 
     @NotNull(message = "Registration id is required")
-    private Long registrationId;
+    private Long raceRegistrationId;
 
     @NotNull(message = "Jockey id is required")
     private Long jockeyId;

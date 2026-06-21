@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class InvitationResponse {
     private Long invitationId;
-    private Long registrationId;
+    private Long raceRegistrationId;
     private Long raceId;
     private String raceName;
     private Long horseId;
@@ -22,4 +22,6 @@ public class InvitationResponse {
     private LocalDateTime sentAt;
     private LocalDateTime respondedAt;
     private String message;
+    private Boolean canAccept;
+    private Boolean canDecline;
 }

@@ -233,7 +233,7 @@ public class RaceInvitationIntegrationTests {
     @Test
     void testOwnerSendsInvitationSuccessfully() throws Exception {
         CreateInvitationRequest request = CreateInvitationRequest.builder()
-                .registrationId(approvedRegistration.getRegistrationId())
+                .raceRegistrationId(approvedRegistration.getRegistrationId())
                 .jockeyId(jockeyProfile.getJockeyId())
                 .message("Ride my horse please")
                 .build();
@@ -242,12 +242,12 @@ public class RaceInvitationIntegrationTests {
                 .header("Authorization", ownerToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
+                .andExpect(status().isOk())
                 .andReturn();
 
         InvitationResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), InvitationResponse.class);
         assertNotNull(response.getInvitationId());
-        assertEquals(approvedRegistration.getRegistrationId(), response.getRegistrationId());
+        assertEquals(approvedRegistration.getRegistrationId(), response.getRaceRegistrationId());
         assertEquals(jockeyProfile.getJockeyId(), response.getJockeyId());
         assertEquals("SENT", response.getStatus());
         assertNotNull(response.getSentAt());
@@ -275,16 +275,16 @@ public class RaceInvitationIntegrationTests {
         String owner2Token = "Bearer " + ownerAuth2.getToken();
 
         CreateInvitationRequest request = CreateInvitationRequest.builder()
-                .registrationId(approvedRegistration.getRegistrationId())
+                .raceRegistrationId(approvedRegistration.getRegistrationId())
                 .jockeyId(jockeyProfile.getJockeyId())
                 .build();
 
-        // Should return 404 convention (hidden resource)
+        // Should return 403 Forbidden
         mockMvc.perform(post("/api/invitations")
                 .header("Authorization", owner2Token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -311,7 +311,7 @@ public class RaceInvitationIntegrationTests {
                 .build());
 
         CreateInvitationRequest request = CreateInvitationRequest.builder()
-                .registrationId(pendingReg.getRegistrationId())
+                .raceRegistrationId(pendingReg.getRegistrationId())
                 .jockeyId(jockeyProfile.getJockeyId())
                 .build();
 
@@ -325,7 +325,7 @@ public class RaceInvitationIntegrationTests {
     @Test
     void testDuplicateRegistrationJockeyInvitationIsRejected() throws Exception {
         CreateInvitationRequest request = CreateInvitationRequest.builder()
-                .registrationId(approvedRegistration.getRegistrationId())
+                .raceRegistrationId(approvedRegistration.getRegistrationId())
                 .jockeyId(jockeyProfile.getJockeyId())
                 .build();
 
@@ -334,7 +334,7 @@ public class RaceInvitationIntegrationTests {
                 .header("Authorization", ownerToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated());
+                .andExpect(status().isOk());
 
         // Second invitation (duplicate) -> should return 409 Conflict
         mockMvc.perform(post("/api/invitations")
@@ -348,14 +348,14 @@ public class RaceInvitationIntegrationTests {
     void testJockeyCanViewOnlyTheirOwnInvitations() throws Exception {
         // Create invitation for jockey
         RaceInvitation invitation = raceInvitationRepository.save(RaceInvitation.builder()
-                .registration(approvedRegistration)
+                .raceRegistration(approvedRegistration)
                 .jockey(jockeyProfile)
                 .invitationStatus(RaceInvitationStatus.SENT)
                 .sentAt(LocalDateTime.now())
                 .build());
 
         // Retrieve my invitations as jockey
-        MvcResult result = mockMvc.perform(get("/api/invitations/my")
+        MvcResult result = mockMvc.perform(get("/api/invitations")
                 .header("Authorization", jockeyToken))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -369,7 +369,7 @@ public class RaceInvitationIntegrationTests {
     void testJockeyAcceptsInvitationSuccessfully() throws Exception {
         // Create invitation
         RaceInvitation invitation = raceInvitationRepository.save(RaceInvitation.builder()
-                .registration(approvedRegistration)
+                .raceRegistration(approvedRegistration)
                 .jockey(jockeyProfile)
                 .invitationStatus(RaceInvitationStatus.SENT)
                 .sentAt(LocalDateTime.now())
@@ -394,7 +394,7 @@ public class RaceInvitationIntegrationTests {
     void testDifferentJockeyCannotAccept() throws Exception {
         // Create invitation for jockeyProfile
         RaceInvitation invitation = raceInvitationRepository.save(RaceInvitation.builder()
-                .registration(approvedRegistration)
+                .raceRegistration(approvedRegistration)
                 .jockey(jockeyProfile)
                 .invitationStatus(RaceInvitationStatus.SENT)
                 .sentAt(LocalDateTime.now())
@@ -428,7 +428,7 @@ public class RaceInvitationIntegrationTests {
     void testJockeyDeclinesInvitationSuccessfully() throws Exception {
         // Create invitation
         RaceInvitation invitation = raceInvitationRepository.save(RaceInvitation.builder()
-                .registration(approvedRegistration)
+                .raceRegistration(approvedRegistration)
                 .jockey(jockeyProfile)
                 .invitationStatus(RaceInvitationStatus.SENT)
                 .sentAt(LocalDateTime.now())
@@ -453,23 +453,23 @@ public class RaceInvitationIntegrationTests {
     void testAcceptedCannotBecomeDeclined() throws Exception {
         // Create invitation
         RaceInvitation invitation = raceInvitationRepository.save(RaceInvitation.builder()
-                .registration(approvedRegistration)
+                .raceRegistration(approvedRegistration)
                 .jockey(jockeyProfile)
                 .invitationStatus(RaceInvitationStatus.ACCEPTED)
                 .sentAt(LocalDateTime.now())
                 .build());
 
-        // Try to decline -> bad request
+        // Try to decline -> conflict
         mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/decline")
                 .header("Authorization", jockeyToken))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isConflict());
     }
 
     @Test
     void testOnlyOneAcceptedInvitationPerRegistration() throws Exception {
         // Create invitation 1 (accepted)
         RaceInvitation invitation1 = raceInvitationRepository.save(RaceInvitation.builder()
-                .registration(approvedRegistration)
+                .raceRegistration(approvedRegistration)
                 .jockey(jockeyProfile)
                 .invitationStatus(RaceInvitationStatus.ACCEPTED)
                 .sentAt(LocalDateTime.now())
@@ -502,7 +502,7 @@ public class RaceInvitationIntegrationTests {
 
         // Create invitation 2 (sent)
         RaceInvitation invitation2 = raceInvitationRepository.save(RaceInvitation.builder()
-                .registration(approvedRegistration)
+                .raceRegistration(approvedRegistration)
                 .jockey(jockeyProfile2)
                 .invitationStatus(RaceInvitationStatus.SENT)
                 .sentAt(LocalDateTime.now())

@@ -21,7 +21,7 @@ public class RaceInvitation {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "registration_id", nullable = false)
-    private RaceRegistration registration;
+    private RaceRegistration raceRegistration;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "jockey_id", nullable = false)

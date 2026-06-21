@@ -23,15 +23,14 @@ public class RaceInvitationController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<InvitationResponse> createInvitation(
             @Valid @RequestBody CreateInvitationRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(raceInvitationService.createInvitation(request));
+        return ResponseEntity.ok(raceInvitationService.createInvitation(request));
     }
 
-    @GetMapping("/my")
-    @PreAuthorize("hasRole('JOCKEY')")
-    public ResponseEntity<List<InvitationResponse>> getMyInvitations(
+    @GetMapping
+    @PreAuthorize("hasRole('JOCKEY') or hasRole('OWNER')")
+    public ResponseEntity<List<InvitationResponse>> getInvitations(
             @RequestParam(required = false) String status) {
-        return ResponseEntity.ok(raceInvitationService.getMyInvitations(status));
+        return ResponseEntity.ok(raceInvitationService.getInvitations(status));
     }
 
     @PutMapping("/{invitationId}/accept")
