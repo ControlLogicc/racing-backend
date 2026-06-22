@@ -1,0 +1,584 @@
+package com.solofounder.horseracing;
+
+import tools.jackson.databind.ObjectMapper;
+import com.solofounder.horseracing.config.JwtService;
+import com.solofounder.horseracing.dto.entry.*;
+import com.solofounder.horseracing.model.*;
+import com.solofounder.horseracing.model.enums.*;
+import com.solofounder.horseracing.repository.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@Transactional
+public class RaceEntryIntegrationTests {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private JwtService jwtService;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private StaffRepository staffRepository;
+
+    @Autowired
+    private JockeyRepository jockeyRepository;
+
+    @Autowired
+    private HorseRepository horseRepository;
+
+    @Autowired
+    private SeasonRepository seasonRepository;
+
+    @Autowired
+    private RacecourseRepository racecourseRepository;
+
+    @Autowired
+    private RaceMeetingRepository raceMeetingRepository;
+
+    @Autowired
+    private RaceConditionRepository raceConditionRepository;
+
+    @Autowired
+    private RaceRepository raceRepository;
+
+    @Autowired
+    private RaceRegistrationRepository raceRegistrationRepository;
+
+    @Autowired
+    private RaceInvitationRepository raceInvitationRepository;
+
+    @Autowired
+    private RaceEntryRepository raceEntryRepository;
+
+    private String adminToken;
+    private String staffToken;
+    private String ownerToken;
+    private String jockeyToken;
+    private Staff staffProfile;
+    private Jockey jockeyProfile1;
+    private Jockey jockeyProfile2;
+    private Race testRace;
+    private Horse horse1;
+    private Horse horse2;
+    private RaceRegistration approvedReg1;
+    private RaceRegistration approvedReg2;
+    private RaceInvitation acceptedInv1;
+    private RaceInvitation acceptedInv2;
+
+    @BeforeEach
+    void setupData() {
+        raceEntryRepository.deleteAll();
+        raceInvitationRepository.deleteAll();
+        raceRegistrationRepository.deleteAll();
+        raceRepository.deleteAll();
+
+        String suffix = String.valueOf(System.nanoTime());
+
+        // Users
+        User adminUser = userRepository.save(User.builder()
+                .fullName("Admin Entry")
+                .email("admin-" + suffix + "@entry-test.com")
+                .passwordHash(passwordEncoder.encode("123456"))
+                .phone("098888")
+                .role(Role.ADMIN)
+                .status(UserStatus.ACTIVE)
+                .build());
+        adminToken = "Bearer " + jwtService.generateToken(adminUser);
+
+        User staffUser = userRepository.save(User.builder()
+                .fullName("Staff Entry")
+                .email("staff-" + suffix + "@entry-test.com")
+                .passwordHash(passwordEncoder.encode("123456"))
+                .phone("098889")
+                .role(Role.STAFF)
+                .status(UserStatus.ACTIVE)
+                .build());
+        staffToken = "Bearer " + jwtService.generateToken(staffUser);
+
+        staffProfile = staffRepository.save(Staff.builder()
+                .user(staffUser)
+                .staffCode("STF-" + suffix)
+                .department("Operations")
+                .status("active")
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        User ownerUser = userRepository.save(User.builder()
+                .fullName("Owner Entry")
+                .email("owner-" + suffix + "@entry-test.com")
+                .passwordHash(passwordEncoder.encode("123456"))
+                .phone("098890")
+                .role(Role.OWNER)
+                .status(UserStatus.ACTIVE)
+                .build());
+        ownerToken = "Bearer " + jwtService.generateToken(ownerUser);
+
+        User jockeyUser1 = userRepository.save(User.builder()
+                .fullName("Jockey Entry One")
+                .email("jockey1-" + suffix + "@entry-test.com")
+                .passwordHash(passwordEncoder.encode("123456"))
+                .phone("098891")
+                .role(Role.JOCKEY)
+                .status(UserStatus.ACTIVE)
+                .build());
+        jockeyToken = "Bearer " + jwtService.generateToken(jockeyUser1);
+
+        jockeyProfile1 = jockeyRepository.save(Jockey.builder()
+                .user(jockeyUser1)
+                .weight(new BigDecimal("50.0"))
+                .experienceYears((short) 5)
+                .status("available")
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        User jockeyUser2 = userRepository.save(User.builder()
+                .fullName("Jockey Entry Two")
+                .email("jockey2-" + suffix + "@entry-test.com")
+                .passwordHash(passwordEncoder.encode("123456"))
+                .phone("098892")
+                .role(Role.JOCKEY)
+                .status(UserStatus.ACTIVE)
+                .build());
+        jockeyProfile2 = jockeyRepository.save(Jockey.builder()
+                .user(jockeyUser2)
+                .weight(new BigDecimal("52.0"))
+                .experienceYears((short) 4)
+                .status("available")
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        // Horses
+        horse1 = horseRepository.save(Horse.builder()
+                .owner(ownerUser)
+                .horseName("Horse One")
+                .color("Bay")
+                .age((short) 3)
+                .gender("M")
+                .currentScore(BigDecimal.ZERO)
+                .horseClass((short) 5)
+                .status("active")
+                .totalWins(0)
+                .build());
+
+        horse2 = horseRepository.save(Horse.builder()
+                .owner(ownerUser)
+                .horseName("Horse Two")
+                .color("Grey")
+                .age((short) 4)
+                .gender("F")
+                .currentScore(BigDecimal.ZERO)
+                .horseClass((short) 5)
+                .status("active")
+                .totalWins(0)
+                .build());
+
+        // Season, Course, Meeting, Condition, Race
+        Season season = seasonRepository.save(Season.builder()
+                .seasonName("Entry Season")
+                .startDate(LocalDate.now())
+                .endDate(LocalDate.now().plusMonths(3))
+                .status("active")
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        Racecourse course = racecourseRepository.save(Racecourse.builder()
+                .racecourseName("Entry Course")
+                .location("HCMC")
+                .surfaceType("turf")
+                .capacity(8000)
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        RaceMeeting meeting = raceMeetingRepository.save(RaceMeeting.builder()
+                .season(season)
+                .racecourse(course)
+                .meetingDate(LocalDate.now().plusDays(5))
+                .status("scheduled")
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        RaceCondition condition = raceConditionRepository.save(RaceCondition.builder()
+                .conditionName("Entry Condition")
+                .distance(1200)
+                .trackType("turf")
+                .minEntries((short) 2)
+                .maxEntries((short) 10)
+                .classRequirement("5")
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        testRace = raceRepository.save(Race.builder()
+                .raceMeeting(meeting)
+                .raceCondition(condition)
+                .raceName("Entry Derby")
+                .raceNo((short) 1)
+                .scheduledTime(LocalDateTime.now().plusDays(5))
+                .registrationOpenAt(LocalDateTime.now().minusDays(2))
+                .registrationCloseAt(LocalDateTime.now().plusDays(2))
+                .status(RaceStatus.SCHEDULED)
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        // Approved Registrations
+        approvedReg1 = raceRegistrationRepository.save(RaceRegistration.builder()
+                .race(testRace)
+                .horse(horse1)
+                .submittedBy(ownerUser)
+                .status(RaceRegistrationStatus.APPROVED)
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        approvedReg2 = raceRegistrationRepository.save(RaceRegistration.builder()
+                .race(testRace)
+                .horse(horse2)
+                .submittedBy(ownerUser)
+                .status(RaceRegistrationStatus.APPROVED)
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        // Accepted Invitations
+        acceptedInv1 = raceInvitationRepository.save(RaceInvitation.builder()
+                .raceRegistration(approvedReg1)
+                .jockey(jockeyProfile1)
+                .invitationStatus(RaceInvitationStatus.ACCEPTED)
+                .sentAt(LocalDateTime.now())
+                .build());
+
+        acceptedInv2 = raceInvitationRepository.save(RaceInvitation.builder()
+                .raceRegistration(approvedReg2)
+                .jockey(jockeyProfile2)
+                .invitationStatus(RaceInvitationStatus.ACCEPTED)
+                .sentAt(LocalDateTime.now())
+                .build());
+    }
+
+    @Test
+    void testCreateEntrySuccess() throws Exception {
+        CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg1.getRegistrationId())
+                .invitationId(acceptedInv1.getInvitationId())
+                .gateNumber((short) 1)
+                .handicapWeight(new BigDecimal("50.5"))
+                .build();
+
+        MvcResult result = mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        RaceEntryResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), RaceEntryResponse.class);
+        assertNotNull(response.getEntryId());
+        assertEquals("declared", response.getEntryStatus());
+        assertEquals((short) 1, response.getGateNumber());
+        assertEquals(new BigDecimal("50.5"), response.getHandicapWeight());
+        assertEquals(staffProfile.getStaffId(), response.getConfirmedByStaffId());
+
+        // Verify Invitation is now USED
+        RaceInvitation dbInv = raceInvitationRepository.findById(acceptedInv1.getInvitationId()).orElseThrow();
+        assertEquals(RaceInvitationStatus.USED, dbInv.getInvitationStatus());
+    }
+
+    @Test
+    void testCreateEntryAdminSuccess() throws Exception {
+        CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg2.getRegistrationId())
+                .invitationId(acceptedInv2.getInvitationId())
+                .gateNumber((short) 2)
+                .handicapWeight(new BigDecimal("52.0"))
+                .build();
+
+        MvcResult result = mockMvc.perform(post("/api/entries")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        RaceEntryResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), RaceEntryResponse.class);
+        assertNotNull(response.getEntryId());
+        assertNull(response.getConfirmedByStaffId());
+    }
+
+    @Test
+    void testCreateEntryNotApprovedRegistrationFails() throws Exception {
+        // Change registration to PENDING
+        approvedReg1.setStatus(RaceRegistrationStatus.PENDING);
+        raceRegistrationRepository.save(approvedReg1);
+
+        CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg1.getRegistrationId())
+                .invitationId(acceptedInv1.getInvitationId())
+                .gateNumber((short) 1)
+                .handicapWeight(new BigDecimal("50.5"))
+                .build();
+
+        mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testCreateEntryNotAcceptedInvitationFails() throws Exception {
+        // Change invitation to SENT
+        acceptedInv1.setInvitationStatus(RaceInvitationStatus.SENT);
+        raceInvitationRepository.save(acceptedInv1);
+
+        CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg1.getRegistrationId())
+                .invitationId(acceptedInv1.getInvitationId())
+                .gateNumber((short) 1)
+                .handicapWeight(new BigDecimal("50.5"))
+                .build();
+
+        mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testCreateEntryDuplicateRegistrationFails() throws Exception {
+        CreateRaceEntryRequest request1 = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg1.getRegistrationId())
+                .invitationId(acceptedInv1.getInvitationId())
+                .gateNumber((short) 1)
+                .handicapWeight(new BigDecimal("50.5"))
+                .build();
+
+        mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request1)))
+                .andExpect(status().isOk());
+
+        // Try to create again for same registration
+        CreateRaceEntryRequest request2 = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg1.getRegistrationId())
+                .invitationId(acceptedInv1.getInvitationId())
+                .gateNumber((short) 2)
+                .handicapWeight(new BigDecimal("50.5"))
+                .build();
+
+        mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request2)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void testCreateEntryDuplicateGateFails() throws Exception {
+        CreateRaceEntryRequest request1 = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg1.getRegistrationId())
+                .invitationId(acceptedInv1.getInvitationId())
+                .gateNumber((short) 3)
+                .handicapWeight(new BigDecimal("50.5"))
+                .build();
+
+        mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request1)))
+                .andExpect(status().isOk());
+
+        // Try to create another entry using gate 3 in same race
+        CreateRaceEntryRequest request2 = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg2.getRegistrationId())
+                .invitationId(acceptedInv2.getInvitationId())
+                .gateNumber((short) 3)
+                .handicapWeight(new BigDecimal("52.0"))
+                .build();
+
+        mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request2)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void testCreateEntryDuplicateJockeyFails() throws Exception {
+        CreateRaceEntryRequest request1 = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg1.getRegistrationId())
+                .invitationId(acceptedInv1.getInvitationId())
+                .gateNumber((short) 4)
+                .handicapWeight(new BigDecimal("50.5"))
+                .build();
+
+        mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request1)))
+                .andExpect(status().isOk());
+
+        // Assign same jockey to the second entry and try to create
+        acceptedInv2.setJockey(jockeyProfile1); // jockey1 is now on both accepted invitations
+        raceInvitationRepository.save(acceptedInv2);
+
+        CreateRaceEntryRequest request2 = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg2.getRegistrationId())
+                .invitationId(acceptedInv2.getInvitationId())
+                .gateNumber((short) 5)
+                .handicapWeight(new BigDecimal("52.0"))
+                .build();
+
+        mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request2)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void testGetEntryAndEntriesForRace() throws Exception {
+        CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg1.getRegistrationId())
+                .invitationId(acceptedInv1.getInvitationId())
+                .gateNumber((short) 1)
+                .handicapWeight(new BigDecimal("50.5"))
+                .build();
+
+        MvcResult result = mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+        RaceEntryResponse created = objectMapper.readValue(result.getResponse().getContentAsString(), RaceEntryResponse.class);
+
+        // Get single entry detail
+        mockMvc.perform(get("/api/entries/" + created.getEntryId())
+                .header("Authorization", ownerToken))
+                .andExpect(status().isOk());
+
+        // Get entries for race
+        mockMvc.perform(get("/api/entries/race/" + testRace.getRaceId())
+                .header("Authorization", jockeyToken))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testUpdateWeightSuccess() throws Exception {
+        CreateRaceEntryRequest createReq = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg1.getRegistrationId())
+                .invitationId(acceptedInv1.getInvitationId())
+                .gateNumber((short) 1)
+                .handicapWeight(new BigDecimal("50.5"))
+                .build();
+
+        MvcResult result = mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(createReq)))
+                .andExpect(status().isOk())
+                .andReturn();
+        RaceEntryResponse created = objectMapper.readValue(result.getResponse().getContentAsString(), RaceEntryResponse.class);
+
+        UpdateWeightRequest weightReq = UpdateWeightRequest.builder()
+                .actualWeight(new BigDecimal("51.0"))
+                .weightCheckStatus("passed")
+                .build();
+
+        MvcResult updatedResult = mockMvc.perform(put("/api/entries/" + created.getEntryId() + "/weight")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(weightReq)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        RaceEntryResponse response = objectMapper.readValue(updatedResult.getResponse().getContentAsString(), RaceEntryResponse.class);
+        assertEquals(new BigDecimal("51.0"), response.getActualWeight());
+        assertEquals("passed", response.getWeightCheckStatus());
+    }
+
+    @Test
+    void testUpdateStatusSuccess() throws Exception {
+        CreateRaceEntryRequest createReq = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg1.getRegistrationId())
+                .invitationId(acceptedInv1.getInvitationId())
+                .gateNumber((short) 1)
+                .handicapWeight(new BigDecimal("50.5"))
+                .build();
+
+        MvcResult result = mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(createReq)))
+                .andExpect(status().isOk())
+                .andReturn();
+        RaceEntryResponse created = objectMapper.readValue(result.getResponse().getContentAsString(), RaceEntryResponse.class);
+
+        UpdateStatusRequest statusReq = UpdateStatusRequest.builder()
+                .status("scratched")
+                .build();
+
+        MvcResult updatedResult = mockMvc.perform(put("/api/entries/" + created.getEntryId() + "/status")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(statusReq)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        RaceEntryResponse response = objectMapper.readValue(updatedResult.getResponse().getContentAsString(), RaceEntryResponse.class);
+        assertEquals("scratched", response.getEntryStatus());
+    }
+
+    @Test
+    void testUnauthorizedRoleAccessFails() throws Exception {
+        CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg1.getRegistrationId())
+                .invitationId(acceptedInv1.getInvitationId())
+                .gateNumber((short) 1)
+                .handicapWeight(new BigDecimal("50.5"))
+                .build();
+
+        // Owner/Jockey cannot create entries
+        mockMvc.perform(post("/api/entries")
+                .header("Authorization", ownerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/entries")
+                .header("Authorization", jockeyToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+}
