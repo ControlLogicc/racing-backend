@@ -35,6 +35,13 @@ public class RaceEntryController {
         return ResponseEntity.ok(raceEntryService.getEntriesForRace(raceId));
     }
 
+    @PutMapping("/race/{raceId}/weight-check")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'REFEREE')")
+    public ResponseEntity<List<RaceEntryResponse>> batchWeightCheck(@PathVariable Long raceId,
+                                                                    @Valid @RequestBody BatchWeightCheckRequest request) {
+        return ResponseEntity.ok(raceEntryService.batchWeightCheck(raceId, request));
+    }
+
     @PutMapping("/{id}/weight")
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ResponseEntity<RaceEntryResponse> updateWeight(@PathVariable Long id,

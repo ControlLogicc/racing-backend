@@ -24,4 +24,5 @@ public class InvitationResponse {
     private String message;
     private Boolean canAccept;
     private Boolean canDecline;
+    private Long entryId;
 }
