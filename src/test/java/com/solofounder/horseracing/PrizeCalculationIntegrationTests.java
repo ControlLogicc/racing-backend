@@ -73,6 +73,12 @@ public class PrizeCalculationIntegrationTests {
     private RaceRegistrationRepository raceRegistrationRepository;
 
     @Autowired
+    private RaceInvitationRepository raceInvitationRepository;
+
+    @Autowired
+    private RefereeReportRepository refereeReportRepository;
+
+    @Autowired
     private RaceEntryRepository raceEntryRepository;
 
     @Autowired
@@ -97,8 +103,10 @@ public class PrizeCalculationIntegrationTests {
     @BeforeEach
     void setupData() throws Exception {
         // Clean database tables
+        refereeReportRepository.deleteAll();
         raceResultRepository.deleteAll();
         raceEntryRepository.deleteAll();
+        raceInvitationRepository.deleteAll();
         raceRegistrationRepository.deleteAll();
         prizeStructureRepository.deleteAll();
         raceRepository.deleteAll();

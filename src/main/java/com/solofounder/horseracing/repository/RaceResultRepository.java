@@ -16,6 +16,30 @@ public interface RaceResultRepository extends JpaRepository<RaceResult, Long> {
 
     List<RaceResult> findByRaceRaceId(Long raceId);
 
+    boolean existsByEntryEntryId(Long entryId);
+
+    boolean existsByRaceRaceIdAndPosition(Long raceId, Short position);
+
+    @Query("SELECT r FROM RaceResult r " +
+           "JOIN FETCH r.entry e " +
+           "JOIN FETCH r.race race " +
+           "JOIN FETCH e.horse " +
+           "JOIN FETCH e.jockey j " +
+           "JOIN FETCH j.user " +
+           "WHERE race.raceId = :raceId " +
+           "ORDER BY r.position ASC")
+    List<RaceResult> findByRaceRaceIdWithDetailsOrderByPositionAsc(@Param("raceId") Long raceId);
+
+    @Query("SELECT r FROM RaceResult r " +
+           "JOIN FETCH r.entry e " +
+           "JOIN FETCH r.race race " +
+           "JOIN FETCH e.horse h " +
+           "JOIN FETCH e.jockey j " +
+           "JOIN FETCH j.user " +
+           "WHERE h.horseId = :horseId " +
+           "ORDER BY race.scheduledTime DESC, r.createdAt DESC")
+    List<RaceResult> findByHorseIdWithDetails(@Param("horseId") Long horseId);
+
     List<RaceResult> findByEntryHorseHorseIdAndRaceStatusAndResultStatusIn(
             Long horseId, RaceStatus raceStatus, List<RaceResultStatus> resultStatuses);
 
