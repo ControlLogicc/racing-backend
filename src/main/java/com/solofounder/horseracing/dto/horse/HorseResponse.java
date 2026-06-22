@@ -24,6 +24,8 @@ public class HorseResponse {
     @Schema(example = "5", minimum = "1", maximum = "5")
     private Short horseClass;
 
+    private Integer totalWins;
+
     private String healthNote;
     private String status;
 }

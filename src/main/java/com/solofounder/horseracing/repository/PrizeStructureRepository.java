@@ -7,4 +7,8 @@ public interface PrizeStructureRepository extends JpaRepository<PrizeStructure, 
     boolean existsByRaceRaceIdAndPosition(Long raceId, Short position);
 
     boolean existsByRaceRaceIdAndPositionAndPrizeIdNot(Long raceId, Short position, Long prizeId);
+
+    java.util.Optional<PrizeStructure> findByRaceRaceIdAndPosition(Long raceId, Short position);
+
+    java.util.List<PrizeStructure> findByRaceRaceIdOrderByPositionAsc(Long raceId);
 }

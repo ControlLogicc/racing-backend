@@ -2427,6 +2427,38 @@
         "description": "Expected 401 Unauthorized."
       },
       "response": []
+    },
+    {
+      "name": "61. ADMIN recalculate prizes",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/admin/races/{{raceId}}/recalculate-prizes",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "races",
+            "{{raceId}}",
+            "recalculate-prizes"
+          ]
+        },
+        "description": "Expected 200 OK. Recalculates prize amount and score for race results and updates participating horses scores and classes."
+      },
+      "response": []
     }
   ],
   "variable": [

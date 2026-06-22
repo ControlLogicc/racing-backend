@@ -58,6 +58,7 @@ public class HorseService {
                 .gender(normalizeGender(request.getGender()))
                 .currentScore(BigDecimal.ZERO)
                 .horseClass((short) 5) // Default to Class 5
+                .totalWins(0)
                 .healthNote(trimToNull(request.getHealthNote()))
                 .status("active") // Default to ACTIVE (stored as active)
                 .build();
@@ -234,6 +235,7 @@ public class HorseService {
                 .gender(horse.getGender())
                 .currentScore(horse.getCurrentScore())
                 .horseClass(horse.getHorseClass())
+                .totalWins(horse.getTotalWins())
                 .healthNote(horse.getHealthNote())
                 .status(horse.getStatus() != null ? horse.getStatus().toUpperCase() : "ACTIVE") // Return status as uppercase
                 .build();
