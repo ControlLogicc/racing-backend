@@ -117,10 +117,14 @@ class HorsesRacingApplicationTests {
         @Autowired
         private com.solofounder.horseracing.repository.RaceRegistrationRepository raceRegistrationRepository;
 
+        @Autowired
+        private com.solofounder.horseracing.repository.RefereeReportRepository refereeReportRepository;
+
         private static final java.util.Set<Long> preExistingUserIds = new java.util.HashSet<>();
 
         @BeforeEach
         void cleanDatabase() {
+                refereeReportRepository.deleteAll();
                 raceInvitationRepository.deleteAll();
                 raceRegistrationRepository.deleteAll();
                 // Clean up test horses owned by test users to prevent foreign key errors
