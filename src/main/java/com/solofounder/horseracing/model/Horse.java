@@ -46,6 +46,9 @@ public class Horse {
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
+    @Column(name = "total_wins", nullable = false)
+    private Integer totalWins;
+
     @PrePersist
     protected void onCreate() {
         if (this.currentScore == null) {
@@ -53,6 +56,9 @@ public class Horse {
         }
         if (this.horseClass == null) {
             this.horseClass = 5;
+        }
+        if (this.totalWins == null) {
+            this.totalWins = 0;
         }
         if (this.status == null || this.status.isBlank()) {
             this.status = "active";

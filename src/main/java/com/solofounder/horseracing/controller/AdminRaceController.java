@@ -2,8 +2,11 @@ package com.solofounder.horseracing.controller;
 
 import com.solofounder.horseracing.dto.race.RaceRequest;
 import com.solofounder.horseracing.dto.race.RaceResponse;
+import com.solofounder.horseracing.dto.race.RecalculatePrizesResponse;
 import com.solofounder.horseracing.service.RaceService;
+import com.solofounder.horseracing.service.PrizeCalculationService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +19,7 @@ import java.util.List;
 public class AdminRaceController {
 
     private final RaceService raceService;
+    private final PrizeCalculationService prizeCalculationService;
 
     @GetMapping
     public ResponseEntity<List<RaceResponse>> getAllRaces() {
@@ -57,5 +61,11 @@ public class AdminRaceController {
     public ResponseEntity<Void> deleteRace(@PathVariable Long id) {
         raceService.deleteRace(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{raceId}/recalculate-prizes")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<RecalculatePrizesResponse> recalculatePrizes(@PathVariable Long raceId) {
+        return ResponseEntity.ok(prizeCalculationService.recalculatePrizes(raceId));
     }
 }

@@ -14,7 +14,7 @@ public class RaceRegistrationStatusConverter implements AttributeConverter<RaceR
         }
         switch (status) {
             case PENDING:
-                return "pending_review";
+                return "pending";
             case APPROVED:
                 return "approved";
             case REJECTED:
