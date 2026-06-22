@@ -258,6 +258,16 @@ class RaceResultIntegrationTests {
     }
 
     @Test
+    void scratchedEntryCannotHaveResult() throws Exception {
+        RaceEntry entry = entries.get(0);
+        entry.setEntryStatus("scratched");
+        raceEntryRepository.save(entry);
+
+        postResult(adminToken, entry.getEntryId(), (short) 1, null)
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void getResultsByRaceReturnsSortedByPosition() throws Exception {
         createResult(entries.get(1), (short) 2, RaceResultStatus.PROVISIONAL);
         createResult(entries.get(0), (short) 1, RaceResultStatus.PROVISIONAL);

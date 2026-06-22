@@ -32,6 +32,7 @@ public class RaceInvitationService {
     private final JockeyRepository jockeyRepository;
     private final UserRepository userRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final RaceEntryRepository raceEntryRepository;
 
     public InvitationResponse createInvitation(CreateInvitationRequest request) {
         User currentUser = getCurrentUser();
@@ -56,6 +57,12 @@ public class RaceInvitationService {
         if (race == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Race not found");
         }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (race.getRegistrationCloseAt() != null && now.isAfter(race.getRegistrationCloseAt())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race registration period is closed");
+        }
+
         if (race.getStatus() == RaceStatus.CANCELLED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race is cancelled");
         }
@@ -115,7 +122,7 @@ public class RaceInvitationService {
         return toResponse(raceInvitationRepository.save(invitation));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<InvitationResponse> getInvitations(String statusStr) {
         User currentUser = getCurrentUser();
 
@@ -132,19 +139,29 @@ public class RaceInvitationService {
         if (currentUser.getRole() == Role.JOCKEY) {
             jockeyRepository.findByUserUserId(currentUser.getUserId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey profile not found"));
-            if (status != null) {
-                invitations = raceInvitationRepository.findByJockeyUserUserIdAndInvitationStatus(currentUser.getUserId(), status);
-            } else {
-                invitations = raceInvitationRepository.findByJockeyUserUserId(currentUser.getUserId());
-            }
+            invitations = raceInvitationRepository.findByJockeyUserUserId(currentUser.getUserId());
         } else if (currentUser.getRole() == Role.OWNER) {
-            if (status != null) {
-                invitations = raceInvitationRepository.findByRaceRegistrationHorseOwnerUserIdAndInvitationStatus(currentUser.getUserId(), status);
-            } else {
-                invitations = raceInvitationRepository.findByRaceRegistrationHorseOwnerUserId(currentUser.getUserId());
-            }
+            invitations = raceInvitationRepository.findByRaceRegistrationHorseOwnerUserId(currentUser.getUserId());
         } else {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        for (RaceInvitation inv : invitations) {
+            if ((inv.getInvitationStatus() == RaceInvitationStatus.SENT || inv.getInvitationStatus() == RaceInvitationStatus.PENDING_RESPONSE)
+                    && inv.getRaceRegistration().getRace().getRegistrationCloseAt() != null
+                    && now.isAfter(inv.getRaceRegistration().getRace().getRegistrationCloseAt())) {
+                inv.setInvitationStatus(RaceInvitationStatus.EXPIRED);
+                inv.setRespondedAt(now);
+                raceInvitationRepository.save(inv);
+            }
+        }
+
+        if (status != null) {
+            final RaceInvitationStatus finalStatus = status;
+            invitations = invitations.stream()
+                    .filter(inv -> inv.getInvitationStatus() == finalStatus)
+                    .toList();
         }
 
         return invitations.stream()
@@ -184,6 +201,14 @@ public class RaceInvitationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race is not in valid status");
         }
 
+        LocalDateTime now = LocalDateTime.now();
+        if (race.getRegistrationCloseAt() != null && now.isAfter(race.getRegistrationCloseAt())) {
+            invitation.setInvitationStatus(RaceInvitationStatus.EXPIRED);
+            invitation.setRespondedAt(now);
+            raceInvitationRepository.save(invitation);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation expired because race registration period is closed");
+        }
+
         // Check if registration already has an Entry (via native database query)
         Integer entryCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM dbo.race_entry WHERE registration_id = ?",
@@ -204,9 +229,35 @@ public class RaceInvitationService {
         }
 
         invitation.setInvitationStatus(RaceInvitationStatus.ACCEPTED);
-        invitation.setRespondedAt(LocalDateTime.now());
+        invitation.setRespondedAt(now);
+        invitation = raceInvitationRepository.save(invitation);
 
-        return toResponse(raceInvitationRepository.save(invitation));
+        // Check if unique race + horse/jockey
+        if (raceEntryRepository.existsByRaceRaceIdAndHorseHorseId(race.getRaceId(), registration.getHorse().getHorseId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Horse is already entered in this race");
+        }
+        if (raceEntryRepository.existsByRaceRaceIdAndJockeyJockeyId(race.getRaceId(), invitation.getJockey().getJockeyId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Jockey is already entered in this race");
+        }
+
+        final RaceRegistration finalRegistration = registration;
+        final RaceInvitation finalInvitation = invitation;
+
+        // Auto-create RaceEntry
+        RaceEntry entry = raceEntryRepository.findByRegistrationRegistrationId(registration.getRegistrationId())
+                .orElseGet(() -> {
+                    RaceEntry newEntry = RaceEntry.builder()
+                            .race(race)
+                            .registration(finalRegistration)
+                            .invitation(finalInvitation)
+                            .horse(finalRegistration.getHorse())
+                            .jockey(finalInvitation.getJockey())
+                            .entryStatus("declared")
+                            .build();
+                    return raceEntryRepository.save(newEntry);
+                });
+
+        return toResponse(invitation);
     }
 
     public InvitationResponse declineInvitation(Long invitationId) {
@@ -228,8 +279,18 @@ public class RaceInvitationService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Invitation is already responded");
         }
 
+        RaceRegistration registration = invitation.getRaceRegistration();
+        Race race = registration.getRace();
+        LocalDateTime now = LocalDateTime.now();
+        if (race.getRegistrationCloseAt() != null && now.isAfter(race.getRegistrationCloseAt())) {
+            invitation.setInvitationStatus(RaceInvitationStatus.EXPIRED);
+            invitation.setRespondedAt(now);
+            raceInvitationRepository.save(invitation);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation expired because race registration period is closed");
+        }
+
         invitation.setInvitationStatus(RaceInvitationStatus.DECLINED);
-        invitation.setRespondedAt(LocalDateTime.now());
+        invitation.setRespondedAt(now);
 
         return toResponse(raceInvitationRepository.save(invitation));
     }
@@ -250,6 +311,15 @@ public class RaceInvitationService {
     }
 
     private InvitationResponse toResponse(RaceInvitation invitation) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime closeAt = invitation.getRaceRegistration().getRace().getRegistrationCloseAt();
+        boolean hasExpired = invitation.getInvitationStatus() == RaceInvitationStatus.EXPIRED || (closeAt != null && now.isAfter(closeAt));
+        boolean canAct = invitation.getInvitationStatus() == RaceInvitationStatus.SENT && !hasExpired;
+
+        Long entryId = raceEntryRepository.findByRegistrationRegistrationId(invitation.getRaceRegistration().getRegistrationId())
+                .map(RaceEntry::getEntryId)
+                .orElse(null);
+
         return InvitationResponse.builder()
                 .invitationId(invitation.getInvitationId())
                 .raceRegistrationId(invitation.getRaceRegistration().getRegistrationId())
@@ -261,12 +331,13 @@ public class RaceInvitationService {
                 .ownerName(invitation.getRaceRegistration().getHorse().getOwner().getFullName())
                 .jockeyId(invitation.getJockey().getJockeyId())
                 .jockeyName(invitation.getJockey().getUser().getFullName())
-                .status(invitation.getInvitationStatus().name())
+                .status(hasExpired ? RaceInvitationStatus.EXPIRED.name() : invitation.getInvitationStatus().name())
                 .sentAt(invitation.getSentAt())
                 .respondedAt(invitation.getRespondedAt())
                 .message(invitation.getMessage())
-                .canAccept(invitation.getInvitationStatus() == RaceInvitationStatus.SENT)
-                .canDecline(invitation.getInvitationStatus() == RaceInvitationStatus.SENT)
+                .canAccept(canAct)
+                .canDecline(canAct)
+                .entryId(entryId)
                 .build();
     }
 }

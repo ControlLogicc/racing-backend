@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -70,6 +71,9 @@ public class RaceInvitationIntegrationTests {
 
     @Autowired
     private RaceInvitationRepository raceInvitationRepository;
+
+    @Autowired
+    private RaceEntryRepository raceEntryRepository;
 
     @Autowired
     private RefereeReportRepository refereeReportRepository;
@@ -516,5 +520,115 @@ public class RaceInvitationIntegrationTests {
         mockMvc.perform(put("/api/invitations/" + invitation2.getInvitationId() + "/accept")
                 .header("Authorization", "Bearer " + jockeyAuth2.getToken()))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void testOwnerCannotInviteJockeyAfterRegistrationCloseAt() throws Exception {
+        // Change testRace registrationCloseAt to past
+        testRace.setRegistrationCloseAt(LocalDateTime.now().minusMinutes(1));
+        raceRepository.save(testRace);
+
+        CreateInvitationRequest request = CreateInvitationRequest.builder()
+                .raceRegistrationId(approvedRegistration.getRegistrationId())
+                .jockeyId(jockeyProfile.getJockeyId())
+                .message("Ride my horse please")
+                .build();
+
+        // Should return 400 Bad Request
+        mockMvc.perform(post("/api/invitations")
+                .header("Authorization", ownerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testJockeyAcceptsInvitationBeforeRegistrationCloseAtCreatesRaceEntry() throws Exception {
+        // Create invitation
+        RaceInvitation invitation = raceInvitationRepository.save(RaceInvitation.builder()
+                .raceRegistration(approvedRegistration)
+                .jockey(jockeyProfile)
+                .invitationStatus(RaceInvitationStatus.SENT)
+                .sentAt(LocalDateTime.now())
+                .build());
+
+        // Accept invitation
+        MvcResult result = mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/accept")
+                .header("Authorization", jockeyToken))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        InvitationResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), InvitationResponse.class);
+        assertEquals("ACCEPTED", response.getStatus());
+        assertNotNull(response.getEntryId());
+
+        // Verify RaceEntry is created
+        Optional<RaceEntry> entryOpt = raceEntryRepository.findById(response.getEntryId());
+        assertTrue(entryOpt.isPresent());
+        RaceEntry entry = entryOpt.get();
+        assertEquals(testRace.getRaceId(), entry.getRace().getRaceId());
+        assertEquals(ownerHorse.getHorseId(), entry.getHorse().getHorseId());
+        assertEquals(jockeyProfile.getJockeyId(), entry.getJockey().getJockeyId());
+
+        // Accepting same invitation again (or trying to) returns conflict because it's already responded
+        mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/accept")
+                .header("Authorization", jockeyToken))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void testJockeyCannotAcceptInvitationAfterRegistrationCloseAt() throws Exception {
+        // Create invitation
+        RaceInvitation invitation = raceInvitationRepository.save(RaceInvitation.builder()
+                .raceRegistration(approvedRegistration)
+                .jockey(jockeyProfile)
+                .invitationStatus(RaceInvitationStatus.SENT)
+                .sentAt(LocalDateTime.now())
+                .build());
+
+        // Change registrationCloseAt to past
+        testRace.setRegistrationCloseAt(LocalDateTime.now().minusMinutes(1));
+        raceRepository.save(testRace);
+
+        // Try to accept -> should return 400 Bad Request
+        mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/accept")
+                .header("Authorization", jockeyToken))
+                .andExpect(status().isBadRequest());
+
+        // Verify invitation status is EXPIRED
+        RaceInvitation dbInvitation = raceInvitationRepository.findById(invitation.getInvitationId()).orElseThrow();
+        assertEquals(RaceInvitationStatus.EXPIRED, dbInvitation.getInvitationStatus());
+    }
+
+    @Test
+    void testGetInvitationsAfterRegistrationCloseAtLazyExpires() throws Exception {
+        // Create invitation
+        RaceInvitation invitation = raceInvitationRepository.save(RaceInvitation.builder()
+                .raceRegistration(approvedRegistration)
+                .jockey(jockeyProfile)
+                .invitationStatus(RaceInvitationStatus.SENT)
+                .sentAt(LocalDateTime.now())
+                .build());
+
+        // Change registrationCloseAt to past
+        testRace.setRegistrationCloseAt(LocalDateTime.now().minusMinutes(1));
+        raceRepository.save(testRace);
+
+        // Call GET invitations as jockey
+        MvcResult result = mockMvc.perform(get("/api/invitations")
+                .header("Authorization", jockeyToken))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        InvitationResponse[] responses = objectMapper.readValue(result.getResponse().getContentAsString(), InvitationResponse[].class);
+        assertEquals(1, responses.length);
+        assertEquals("EXPIRED", responses[0].getStatus());
+        assertFalse(responses[0].getCanAccept());
+        assertFalse(responses[0].getCanDecline());
+        assertNull(responses[0].getEntryId());
+
+        // Verify database value updated to EXPIRED
+        RaceInvitation dbInvitation = raceInvitationRepository.findById(invitation.getInvitationId()).orElseThrow();
+        assertEquals(RaceInvitationStatus.EXPIRED, dbInvitation.getInvitationStatus());
     }
 }

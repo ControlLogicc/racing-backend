@@ -63,6 +63,10 @@ public class RaceResultService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race entry not found"));
         Race race = entry.getRace();
 
+        if ("scratched".equalsIgnoreCase(entry.getEntryStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Scratched race entry cannot have a result");
+        }
+
         if (!RECORDABLE_RACE_STATUSES.contains(race.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race status does not allow result recording");
         }

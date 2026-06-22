@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -25,6 +24,8 @@ public class RaceEntryService {
     private final RaceInvitationRepository raceInvitationRepository;
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
+    private final RefereeRepository refereeRepository;
+    private final RaceRepository raceRepository;
 
     public RaceEntryResponse createEntry(CreateRaceEntryRequest request) {
         User currentUser = getCurrentUser();
@@ -110,7 +111,26 @@ public class RaceEntryService {
 
     @Transactional(readOnly = true)
     public List<RaceEntryResponse> getEntriesForRace(Long raceId) {
-        return raceEntryRepository.findByRaceRaceId(raceId).stream()
+        return raceEntryRepository.findByRaceRaceIdWithDetails(raceId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    public List<RaceEntryResponse> batchWeightCheck(Long raceId, BatchWeightCheckRequest request) {
+        User currentUser = getCurrentUser();
+        Race race = raceRepository.findById(raceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race not found"));
+        requireWeightCheckPermission(currentUser, race);
+
+        if (race.getStatus() == RaceStatus.OFFICIAL || race.getStatus() == RaceStatus.CANCELLED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race status does not allow weight check");
+        }
+
+        List<RaceEntry> updatedEntries = request.getChecks().stream()
+                .map(check -> applyWeightCheck(raceId, request, check))
+                .toList();
+
+        return raceEntryRepository.saveAll(updatedEntries).stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -128,6 +148,45 @@ public class RaceEntryService {
         entry.setWeightCheckStatus(request.getWeightCheckStatus());
 
         return toResponse(raceEntryRepository.save(entry));
+    }
+
+    private RaceEntry applyWeightCheck(Long raceId, BatchWeightCheckRequest request, WeightCheckItemRequest check) {
+        RaceEntry entry = raceEntryRepository.findByIdWithDetails(check.getEntryId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race entry not found"));
+
+        if (!entry.getRace().getRaceId().equals(raceId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race entry does not belong to this race");
+        }
+
+        boolean passed = Boolean.TRUE.equals(check.getPassed());
+        entry.setHandicapWeight(request.getHandicapWeight());
+        entry.setActualWeight(check.getActualWeight());
+        entry.setWeightCheckStatus(passed ? "passed" : "failed");
+        entry.setEntryStatus(passed ? "ready" : "scratched");
+        return entry;
+    }
+
+    private void requireWeightCheckPermission(User user, Race race) {
+        if (user.getRole() == Role.ADMIN) {
+            return;
+        }
+        if (user.getRole() == Role.STAFF) {
+            Staff staff = staffRepository.findByUserUserId(user.getUserId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Staff profile not found"));
+            if (race.getStaff() != null && race.getStaff().getStaffId().equals(staff.getStaffId())) {
+                return;
+            }
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+        if (user.getRole() == Role.REFEREE) {
+            Referee referee = refereeRepository.findByUserUserId(user.getUserId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Referee profile not found"));
+            if (race.getReferee() != null && race.getReferee().getRefereeId().equals(referee.getRefereeId())) {
+                return;
+            }
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
     }
 
     public RaceEntryResponse updateStatus(Long id, UpdateStatusRequest request) {

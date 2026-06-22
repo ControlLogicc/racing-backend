@@ -52,6 +52,9 @@ public class RaceEntryIntegrationTests {
     private StaffRepository staffRepository;
 
     @Autowired
+    private RefereeRepository refereeRepository;
+
+    @Autowired
     private JockeyRepository jockeyRepository;
 
     @Autowired
@@ -81,11 +84,17 @@ public class RaceEntryIntegrationTests {
     @Autowired
     private RaceEntryRepository raceEntryRepository;
 
+    @Autowired
+    private RefereeReportRepository refereeReportRepository;
+
     private String adminToken;
     private String staffToken;
+    private String otherStaffToken;
+    private String refereeToken;
     private String ownerToken;
     private String jockeyToken;
     private Staff staffProfile;
+    private Referee refereeProfile;
     private Jockey jockeyProfile1;
     private Jockey jockeyProfile2;
     private Race testRace;
@@ -98,6 +107,7 @@ public class RaceEntryIntegrationTests {
 
     @BeforeEach
     void setupData() {
+        refereeReportRepository.deleteAll();
         raceEntryRepository.deleteAll();
         raceInvitationRepository.deleteAll();
         raceRegistrationRepository.deleteAll();
@@ -131,6 +141,41 @@ public class RaceEntryIntegrationTests {
                 .staffCode("STF-" + suffix)
                 .department("Operations")
                 .status("active")
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        User otherStaffUser = userRepository.save(User.builder()
+                .fullName("Other Staff Entry")
+                .email("other-staff-" + suffix + "@entry-test.com")
+                .passwordHash(passwordEncoder.encode("123456"))
+                .phone("098880")
+                .role(Role.STAFF)
+                .status(UserStatus.ACTIVE)
+                .build());
+        otherStaffToken = "Bearer " + jwtService.generateToken(otherStaffUser);
+
+        staffRepository.save(Staff.builder()
+                .user(otherStaffUser)
+                .staffCode("OSTF-" + suffix)
+                .department("Operations")
+                .status("active")
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        User refereeUser = userRepository.save(User.builder()
+                .fullName("Referee Entry")
+                .email("referee-" + suffix + "@entry-test.com")
+                .passwordHash(passwordEncoder.encode("123456"))
+                .phone("098881")
+                .role(Role.REFEREE)
+                .status(UserStatus.ACTIVE)
+                .build());
+        refereeToken = "Bearer " + jwtService.generateToken(refereeUser);
+
+        refereeProfile = refereeRepository.save(Referee.builder()
+                .user(refereeUser)
+                .licenseNo("REF-" + suffix)
+                .status(RefereeStatus.ACTIVE)
                 .createdAt(LocalDateTime.now())
                 .build());
 
@@ -241,6 +286,8 @@ public class RaceEntryIntegrationTests {
         testRace = raceRepository.save(Race.builder()
                 .raceMeeting(meeting)
                 .raceCondition(condition)
+                .staff(staffProfile)
+                .referee(refereeProfile)
                 .raceName("Entry Derby")
                 .raceNo((short) 1)
                 .scheduledTime(LocalDateTime.now().plusDays(5))
@@ -528,6 +575,153 @@ public class RaceEntryIntegrationTests {
     }
 
     @Test
+    void testBatchWeightCheckPassedAndFailedSuccess() throws Exception {
+        RaceEntry entry1 = saveDeclaredEntry(approvedReg1, acceptedInv1, horse1, jockeyProfile1, (short) 1);
+        RaceEntry entry2 = saveDeclaredEntry(approvedReg2, acceptedInv2, horse2, jockeyProfile2, (short) 2);
+
+        BatchWeightCheckRequest request = BatchWeightCheckRequest.builder()
+                .handicapWeight(new BigDecimal("55.00"))
+                .checks(List.of(
+                        WeightCheckItemRequest.builder()
+                                .entryId(entry1.getEntryId())
+                                .actualWeight(new BigDecimal("55.20"))
+                                .passed(true)
+                                .note("Passed")
+                                .build(),
+                        WeightCheckItemRequest.builder()
+                                .entryId(entry2.getEntryId())
+                                .actualWeight(new BigDecimal("58.50"))
+                                .passed(false)
+                                .note("Over weight")
+                                .build()
+                ))
+                .build();
+
+        MvcResult result = mockMvc.perform(put("/api/entries/race/" + testRace.getRaceId() + "/weight-check")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        RaceEntryResponse[] responses = objectMapper.readValue(result.getResponse().getContentAsString(), RaceEntryResponse[].class);
+        assertEquals(2, responses.length);
+
+        RaceEntry refreshedEntry1 = raceEntryRepository.findById(entry1.getEntryId()).orElseThrow();
+        RaceEntry refreshedEntry2 = raceEntryRepository.findById(entry2.getEntryId()).orElseThrow();
+        assertEquals(0, new BigDecimal("55.00").compareTo(refreshedEntry1.getHandicapWeight()));
+        assertEquals(0, new BigDecimal("55.20").compareTo(refreshedEntry1.getActualWeight()));
+        assertEquals("passed", refreshedEntry1.getWeightCheckStatus());
+        assertEquals("ready", refreshedEntry1.getEntryStatus());
+        assertEquals(0, new BigDecimal("55.00").compareTo(refreshedEntry2.getHandicapWeight()));
+        assertEquals(0, new BigDecimal("58.50").compareTo(refreshedEntry2.getActualWeight()));
+        assertEquals("failed", refreshedEntry2.getWeightCheckStatus());
+        assertEquals("scratched", refreshedEntry2.getEntryStatus());
+    }
+
+    @Test
+    void testBatchWeightCheckInvalidWeightsReturn400() throws Exception {
+        RaceEntry entry = saveDeclaredEntry(approvedReg1, acceptedInv1, horse1, jockeyProfile1, (short) 1);
+
+        BatchWeightCheckRequest invalidHandicap = BatchWeightCheckRequest.builder()
+                .handicapWeight(BigDecimal.ZERO)
+                .checks(List.of(WeightCheckItemRequest.builder()
+                        .entryId(entry.getEntryId())
+                        .actualWeight(new BigDecimal("55.20"))
+                        .passed(true)
+                        .build()))
+                .build();
+
+        mockMvc.perform(put("/api/entries/race/" + testRace.getRaceId() + "/weight-check")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(invalidHandicap)))
+                .andExpect(status().isBadRequest());
+
+        BatchWeightCheckRequest invalidActual = BatchWeightCheckRequest.builder()
+                .handicapWeight(new BigDecimal("55.00"))
+                .checks(List.of(WeightCheckItemRequest.builder()
+                        .entryId(entry.getEntryId())
+                        .actualWeight(BigDecimal.ZERO)
+                        .passed(true)
+                        .build()))
+                .build();
+
+        mockMvc.perform(put("/api/entries/race/" + testRace.getRaceId() + "/weight-check")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(invalidActual)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testBatchWeightCheckEntryNotBelongingToRaceReturns400() throws Exception {
+        RaceEntry entry = saveDeclaredEntry(approvedReg1, acceptedInv1, horse1, jockeyProfile1, (short) 1);
+        Race otherRace = raceRepository.save(Race.builder()
+                .raceMeeting(testRace.getRaceMeeting())
+                .raceCondition(testRace.getRaceCondition())
+                .staff(staffProfile)
+                .referee(refereeProfile)
+                .raceName("Other Entry Race")
+                .raceNo((short) 2)
+                .scheduledTime(LocalDateTime.now().plusDays(5))
+                .registrationOpenAt(LocalDateTime.now().minusDays(2))
+                .registrationCloseAt(LocalDateTime.now().plusDays(2))
+                .status(RaceStatus.SCHEDULED)
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        BatchWeightCheckRequest request = validWeightCheckRequest(entry.getEntryId(), true);
+
+        mockMvc.perform(put("/api/entries/race/" + otherRace.getRaceId() + "/weight-check")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testBatchWeightCheckSecurityRules() throws Exception {
+        RaceEntry entry = saveDeclaredEntry(approvedReg1, acceptedInv1, horse1, jockeyProfile1, (short) 1);
+        BatchWeightCheckRequest request = validWeightCheckRequest(entry.getEntryId(), true);
+
+        mockMvc.perform(put("/api/entries/race/" + testRace.getRaceId() + "/weight-check")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(put("/api/entries/race/" + testRace.getRaceId() + "/weight-check")
+                .header("Authorization", ownerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/entries/race/" + testRace.getRaceId() + "/weight-check")
+                .header("Authorization", jockeyToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/entries/race/" + testRace.getRaceId() + "/weight-check")
+                .header("Authorization", otherStaffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void testBatchWeightCheckAssignedRefereeSuccess() throws Exception {
+        RaceEntry entry = saveDeclaredEntry(approvedReg1, acceptedInv1, horse1, jockeyProfile1, (short) 1);
+        BatchWeightCheckRequest request = validWeightCheckRequest(entry.getEntryId(), true);
+
+        mockMvc.perform(put("/api/entries/race/" + testRace.getRaceId() + "/weight-check")
+                .header("Authorization", refereeToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void testUpdateStatusSuccess() throws Exception {
         CreateRaceEntryRequest createReq = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg1.getRegistrationId())
@@ -580,5 +774,30 @@ public class RaceEntryIntegrationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isForbidden());
+    }
+
+    private RaceEntry saveDeclaredEntry(RaceRegistration registration, RaceInvitation invitation, Horse horse, Jockey jockey, Short gateNumber) {
+        return raceEntryRepository.save(RaceEntry.builder()
+                .race(testRace)
+                .registration(registration)
+                .invitation(invitation)
+                .horse(horse)
+                .jockey(jockey)
+                .confirmedByStaff(staffProfile)
+                .gateNumber(gateNumber)
+                .handicapWeight(new BigDecimal("55.00"))
+                .entryStatus("declared")
+                .build());
+    }
+
+    private BatchWeightCheckRequest validWeightCheckRequest(Long entryId, boolean passed) {
+        return BatchWeightCheckRequest.builder()
+                .handicapWeight(new BigDecimal("55.00"))
+                .checks(List.of(WeightCheckItemRequest.builder()
+                        .entryId(entryId)
+                        .actualWeight(new BigDecimal("55.20"))
+                        .passed(passed)
+                        .build()))
+                .build();
     }
 }
