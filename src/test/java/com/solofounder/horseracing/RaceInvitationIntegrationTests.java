@@ -72,6 +72,9 @@ public class RaceInvitationIntegrationTests {
     private RaceInvitationRepository raceInvitationRepository;
 
     @Autowired
+    private RefereeReportRepository refereeReportRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -89,6 +92,7 @@ public class RaceInvitationIntegrationTests {
     @BeforeEach
     void setupData() throws Exception {
         // Clear all invitation records
+        refereeReportRepository.deleteAll();
         raceInvitationRepository.deleteAll();
         raceRegistrationRepository.deleteAll();
         raceRepository.deleteAll();

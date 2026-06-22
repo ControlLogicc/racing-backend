@@ -46,7 +46,7 @@ public class Horse {
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
-    @Column(name = "total_wins", nullable = false)
+    @Transient
     private Integer totalWins;
 
     @PrePersist
