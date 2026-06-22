@@ -2459,6 +2459,221 @@
         "description": "Expected 200 OK. Recalculates prize amount and score for race results and updates participating horses scores and classes."
       },
       "response": []
+    },
+    {
+      "name": "62. STAFF create race entry",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"registrationId\": {{registrationId}},\n  \"invitationId\": {{invitationId}},\n  \"gateNumber\": 1,\n  \"handicapWeight\": 50.5\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/entries",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "entries"
+          ]
+        },
+        "description": "Expected 200. Copy response entryId to entryId."
+      },
+      "response": []
+    },
+    {
+      "name": "63. ADMIN create race entry duplicate (Conflict)",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"registrationId\": {{registrationId}},\n  \"invitationId\": {{invitationId}},\n  \"gateNumber\": 2,\n  \"handicapWeight\": 50.5\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/entries",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "entries"
+          ]
+        },
+        "description": "Expected 409 Conflict as registration already has an entry."
+      },
+      "response": []
+    },
+    {
+      "name": "64. GET race entry detail",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/entries/{{entryId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "entries",
+            "{{entryId}}"
+          ]
+        },
+        "description": "Expected 200. Owners/Jockeys can view entries."
+      },
+      "response": []
+    },
+    {
+      "name": "65. GET entries for race",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jockeyToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/entries/race/{{raceId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "entries",
+            "race",
+            "{{raceId}}"
+          ]
+        },
+        "description": "Expected 200. View all entries in a specific race."
+      },
+      "response": []
+    },
+    {
+      "name": "66. STAFF update entry weight check",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"actualWeight\": 51.0,\n  \"weightCheckStatus\": \"passed\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/entries/{{entryId}}/weight",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "entries",
+            "{{entryId}}",
+            "weight"
+          ]
+        },
+        "description": "Expected 200. Staff/Admin records pre-race weight checks."
+      },
+      "response": []
+    },
+    {
+      "name": "67. STAFF update entry status (scratched)",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"scratched\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/entries/{{entryId}}/status",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "entries",
+            "{{entryId}}",
+            "status"
+          ]
+        },
+        "description": "Expected 200. Staff/Admin scratches or disqualifies entry."
+      },
+      "response": []
     }
   ],
   "variable": [
@@ -2564,6 +2779,14 @@
     },
     {
       "key": "secondInvitationId",
+      "value": ""
+    },
+    {
+      "key": "entryId",
+      "value": ""
+    },
+    {
+      "key": "secondEntryId",
       "value": ""
     }
   ]

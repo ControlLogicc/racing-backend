@@ -1,0 +1,130 @@
+<USER_REQUEST>
+Implement ONLY the **Race Entry API** module.
+
+The Race Entry represents the finalized runner in a Race:
+
+Approved Race Registration
+
+* Accepted Jockey Invitation
+* confirmed weight
+* assigned gate number
+  → Race Entry
+
+Do not implement Pre-Race Check, Referee Report, Race Result, or automatic Race status transitions in this task.
+
+Before modifying code, inspect:
+
+* current ERD
+* actual SQL Server race_entry table
+* RaceRegistration entity and status
+* RaceInvitation entity and status
+* Race entity
+* Horse entity
+* Jockey entity
+* Staff entity
+* existing repositories, services, controllers, DTOs
+* SecurityConfig
+* GlobalExceptionHandler
+* postman_collection.json
+* integration tests
+
+Reuse existing project structure. Do not create duplicate entities, repositories, services, controllers, or endpoints.
+
+## 1. Mandatory database verification before coding
+
+Inspect the real SQL Server schema for race_entry.
+
+Report:
+
+* actual table name
+* all existing columns
+* primary key
+* foreign keys
+* unique constraints and indexes
+* check constraints
+* default constraints
+* current status values if an entry status column exists
+* existing duplicate data
+
+Do not assume the schema.
+
+Do not implement entity mappings or insert logic until the actual schema is verified.
+
+Expected fields according to the current workflow:
+
+* entry_id
+* race_id
+* registration_id
+* horse_id
+* jockey_id
+* handicap_weight
+* gate_number
+* status if already present in the approved ERD
+
+Do not add fields outside the approved ERD.
+
+Do not use @Transient to hide schema mismatches.
+
+If a required column or constraint is missing:
+
+* report the mismatch
+* provide an explicit SQL migration
+* keep spring.jpa.hibernate.ddl-auto=none
+* do not let Hibernate auto-alter the database
+
+## 2. Entry status
+
+If the current ERD contains an Entry status, use:
+
+Java/API:
+
+* DECLARED
+
+Database:
+
+* declared
+
+A newly created Race Entry defaults to DECLARED.
+
+Do not allow the cl
+<truncated 11581 bytes>
+* files created
+* files modified
+* endpoints implemented
+* authorization rules
+* duplicate protections
+* weight and gate rules
+* Invitation dependency
+* Postman requests added
+* automated test count
+* final build result
+* remaining limitations
+
+Important restrictions:
+
+* implement only Race Entry API
+* do not create Entry without an APPROVED Registration
+* do not create Entry without an ACCEPTED Jockey Invitation
+* do not accept raceId or horseId independently when they can be derived from Registration
+* do not implement Pre-Race Check
+* do not implement Race Result
+* do not modify unrelated modules
+* do not commit automatically
+
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-21T20:06:57+07:00.
+
+The user's current state is as follows:
+Active Document: f:\Software_Enginere_Semmester V\SWP\Project_SWP\HorsesRacing\src\main\java\com\solofounder\horseracing\service\RaceService.java (LANGUAGE_JAVA)
+Cursor is on line: 285
+Other open documents:
+- f:\Software_Enginere_Semmester V\SWP\Project_SWP\HorsesRacing\src\main\java\com\solofounder\horseracing\model\RaceRegistration.java (LANGUAGE_JAVA)
+- f:\Software_Enginere_Semmester V\SWP\Project_SWP\HorsesRacing\src\main\java\com\solofounder\horseracing\service\HorseService.java (LANGUAGE_JAVA)
+- f:\Software_Enginere_Semmester V\SWP\Project_SWP\HorsesRacing\src\main\java\com\solofounder\horseracing\config\ApplicationConfig.java (LANGUAGE_JAVA)
+- f:\Software_Enginere_Semmester V\SWP\Project_SWP\HorsesRacing\src\main\java\com\solofounder\horseracing\service\AuthService.java (LANGUAGE_JAVA)
+- f:\Software_Enginere_Semmester V\SWP\Project_SWP\HorsesRacing\src\main\java\com\solofounder\horseracing\model\User.java (LANGUAGE_JAVA)
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from None to Gemini 3.5 Flash (High). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>
