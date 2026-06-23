@@ -1465,6 +1465,96 @@ class HorsesRacingApplicationTests {
         }
 
         @Test
+        void testSameStatusTransitionFails() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staff = createStaff("samestat.staff@example.com", "SameStat Staff", "SSSF01");
+                Referee referee = createReferee("samestat.ref@example.com", "SameStat Referee", "SSRF01");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "DRAFT", now.minusMinutes(10), now.plusMinutes(50),
+                                now.plusHours(2));
+
+                // DRAFT -> DRAFT should fail with 400 Bad Request
+                mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"status\":\"DRAFT\"}"))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testLaterTransitionsLifecycleSuccess() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staff = createStaff("laterlife.staff@example.com", "LaterLife Staff", "LLSF01");
+                Referee referee = createReferee("laterlife.ref@example.com", "LaterLife Referee", "LLRF01");
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "CLOSED_FOR_ENTRY", now.minusHours(2), now.minusHours(1),
+                                now.plusHours(1));
+
+                // 1. CLOSED_FOR_ENTRY -> RUNNING
+                mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"status\":\"RUNNING\"}"))
+                                .andExpect(status().isOk());
+
+                // 2. RUNNING -> RESULT_PENDING
+                mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"status\":\"RESULT_PENDING\"}"))
+                                .andExpect(status().isOk());
+
+                // 3. RESULT_PENDING -> OFFICIAL
+                mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"status\":\"OFFICIAL\"}"))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void testCancellationTransitionsSuccess() throws Exception {
+                String adminToken = getAdminToken();
+                Staff staff = createStaff("cancel.staff@example.com", "Cancel Staff", "CNSF01");
+                Referee referee = createReferee("cancel.ref@example.com", "Cancel Referee", "CNRF01");
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+
+                // Test DRAFT -> CANCELLED
+                Race race1 = setupRaceHierarchy(staff, referee, "DRAFT", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
+                mockMvc.perform(patch("/api/race-management/races/" + race1.getRaceId() + "/status")
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"status\":\"CANCELLED\"}"))
+                                .andExpect(status().isOk());
+
+                // Test SCHEDULED -> CANCELLED
+                Race race2 = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
+                mockMvc.perform(patch("/api/race-management/races/" + race2.getRaceId() + "/status")
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"status\":\"CANCELLED\"}"))
+                                .andExpect(status().isOk());
+
+                // Test OPEN_FOR_ENTRY -> CANCELLED
+                Race race3 = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
+                mockMvc.perform(patch("/api/race-management/races/" + race3.getRaceId() + "/status")
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"status\":\"CANCELLED\"}"))
+                                .andExpect(status().isOk());
+
+                // Test CLOSED_FOR_ENTRY -> CANCELLED
+                Race race4 = setupRaceHierarchy(staff, referee, "CLOSED_FOR_ENTRY", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
+                mockMvc.perform(patch("/api/race-management/races/" + race4.getRaceId() + "/status")
+                                .header("Authorization", adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"status\":\"CANCELLED\"}"))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
         void testOpenForEntryDateCheck() throws Exception {
                 String adminToken = getAdminToken();
                 Staff staff = createStaff("datecheck.staff@example.com", "DateCheck Staff", "DCSF01");
@@ -1905,7 +1995,6 @@ class HorsesRacingApplicationTests {
 
         @Test
         void testStaffViewRegistrationsSuccess() throws Exception {
-                String adminToken = getAdminToken();
                 Staff staff = createStaff("reg.view.staff@example.com", "Reg Staff", "RGSF06");
                 Referee referee = createReferee("reg.view.ref@example.com", "Reg Referee", "RGRF06");
 
@@ -1939,7 +2028,6 @@ class HorsesRacingApplicationTests {
 
         @Test
         void testStaffViewRegistrationsUnassignedForbidden() throws Exception {
-                String adminToken = getAdminToken();
                 Staff staffA = createStaff("reg.viewA.staff@example.com", "Reg Staff A", "RGSF07");
                 Staff staffB = createStaff("reg.viewB.staff@example.com", "Reg Staff B", "RGSF08");
                 Referee referee = createReferee("reg.view.refB@example.com", "Reg Referee", "RGRF08");

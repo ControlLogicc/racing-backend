@@ -171,18 +171,21 @@ public class RaceService {
         }
 
         RaceStatus oldStatus = race.getStatus();
-        if (oldStatus == newStatus) {
-            return toResponse(race);
-        }
 
         // Allowed transitions validation
         boolean allowed = false;
-        if (oldStatus == RaceStatus.DRAFT && newStatus == RaceStatus.SCHEDULED) {
-            allowed = true;
-        } else if (oldStatus == RaceStatus.SCHEDULED && newStatus == RaceStatus.OPEN_FOR_ENTRY) {
-            allowed = true;
-        } else if (oldStatus == RaceStatus.OPEN_FOR_ENTRY && newStatus == RaceStatus.CLOSED_FOR_ENTRY) {
-            allowed = true;
+        if (oldStatus == RaceStatus.DRAFT) {
+            allowed = (newStatus == RaceStatus.SCHEDULED || newStatus == RaceStatus.CANCELLED);
+        } else if (oldStatus == RaceStatus.SCHEDULED) {
+            allowed = (newStatus == RaceStatus.OPEN_FOR_ENTRY || newStatus == RaceStatus.CANCELLED);
+        } else if (oldStatus == RaceStatus.OPEN_FOR_ENTRY) {
+            allowed = (newStatus == RaceStatus.CLOSED_FOR_ENTRY || newStatus == RaceStatus.CANCELLED);
+        } else if (oldStatus == RaceStatus.CLOSED_FOR_ENTRY) {
+            allowed = (newStatus == RaceStatus.RUNNING || newStatus == RaceStatus.CANCELLED);
+        } else if (oldStatus == RaceStatus.RUNNING) {
+            allowed = (newStatus == RaceStatus.RESULT_PENDING);
+        } else if (oldStatus == RaceStatus.RESULT_PENDING) {
+            allowed = (newStatus == RaceStatus.OFFICIAL);
         }
 
         if (!allowed) {
