@@ -13,12 +13,14 @@ import com.solofounder.horseracing.model.RaceMeeting;
 import com.solofounder.horseracing.model.RaceRegistration;
 import com.solofounder.horseracing.model.RaceResult;
 import com.solofounder.horseracing.model.Racecourse;
+import com.solofounder.horseracing.model.Referee;
 import com.solofounder.horseracing.model.Season;
 import com.solofounder.horseracing.model.Staff;
 import com.solofounder.horseracing.model.User;
 import com.solofounder.horseracing.model.enums.RaceRegistrationStatus;
 import com.solofounder.horseracing.model.enums.RaceResultStatus;
 import com.solofounder.horseracing.model.enums.RaceStatus;
+import com.solofounder.horseracing.model.enums.RefereeStatus;
 import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.model.enums.UserStatus;
 import com.solofounder.horseracing.repository.HorseRepository;
@@ -31,6 +33,7 @@ import com.solofounder.horseracing.repository.RaceRegistrationRepository;
 import com.solofounder.horseracing.repository.RaceRepository;
 import com.solofounder.horseracing.repository.RaceResultRepository;
 import com.solofounder.horseracing.repository.RacecourseRepository;
+import com.solofounder.horseracing.repository.RefereeRepository;
 import com.solofounder.horseracing.repository.SeasonRepository;
 import com.solofounder.horseracing.repository.StaffRepository;
 import com.solofounder.horseracing.repository.UserRepository;
@@ -97,6 +100,9 @@ class RaceResultIntegrationTests {
     private RacecourseRepository racecourseRepository;
 
     @Autowired
+    private RefereeRepository refereeRepository;
+
+    @Autowired
     private RaceMeetingRepository raceMeetingRepository;
 
     @Autowired
@@ -120,6 +126,8 @@ class RaceResultIntegrationTests {
     private String adminToken;
     private String assignedStaffToken;
     private String otherStaffToken;
+    private String assignedRefereeToken;
+    private String otherRefereeToken;
     private String ownerToken;
     private String jockeyToken;
     private Race race;
@@ -133,6 +141,8 @@ class RaceResultIntegrationTests {
         User admin = createUser("result-admin-" + suffix + "@example.com", "Result Admin", Role.ADMIN);
         User assignedStaffUser = createUser("result-staff-" + suffix + "@example.com", "Result Staff", Role.STAFF);
         User otherStaffUser = createUser("result-other-staff-" + suffix + "@example.com", "Other Staff", Role.STAFF);
+        User assignedRefereeUser = createUser("result-referee-" + suffix + "@example.com", "Result Referee", Role.REFEREE);
+        User otherRefereeUser = createUser("result-other-referee-" + suffix + "@example.com", "Other Referee", Role.REFEREE);
         User owner = createUser("result-owner-" + suffix + "@example.com", "Result Owner", Role.OWNER);
         User jockeyRoleUser = createUser("result-jockey-token-" + suffix + "@example.com", "Result Jockey Token", Role.JOCKEY);
 
@@ -151,13 +161,28 @@ class RaceResultIntegrationTests {
                 .createdAt(LocalDateTime.now())
                 .build());
 
-        race = createRace(assignedStaff, RaceStatus.RUNNING, "Race Result API Race " + suffix);
+        Referee assignedReferee = refereeRepository.save(Referee.builder()
+                .user(assignedRefereeUser)
+                .licenseNo("RES-REF-" + suffix)
+                .status(RefereeStatus.ACTIVE)
+                .createdAt(LocalDateTime.now())
+                .build());
+        refereeRepository.save(Referee.builder()
+                .user(otherRefereeUser)
+                .licenseNo("RES-OREF-" + suffix)
+                .status(RefereeStatus.ACTIVE)
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        race = createRace(assignedStaff, assignedReferee, RaceStatus.RUNNING, "Race Result API Race " + suffix);
         createPrizeStructures(race);
         createEntries(race, owner, suffix);
 
         adminToken = token(admin);
         assignedStaffToken = token(assignedStaffUser);
         otherStaffToken = token(otherStaffUser);
+        assignedRefereeToken = token(assignedRefereeUser);
+        otherRefereeToken = token(otherRefereeUser);
         ownerToken = token(owner);
         jockeyToken = token(jockeyRoleUser);
     }
@@ -189,8 +214,25 @@ class RaceResultIntegrationTests {
     }
 
     @Test
+    void assignedRefereeRecordResultSuccess() throws Exception {
+        RaceResultResponse response = readResult(postResult(assignedRefereeToken, entries.get(1).getEntryId(), (short) 2, null)
+                .andExpect(status().isOk())
+                .andReturn());
+
+        assertEquals(entries.get(1).getEntryId(), response.getEntryId());
+        assertEquals(race.getRaceId(), response.getRaceId());
+        assertEquals("PROVISIONAL", response.getResultStatus());
+    }
+
+    @Test
     void staffNotAssignedReturns403() throws Exception {
         postResult(otherStaffToken, entries.get(0).getEntryId(), (short) 1, null)
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void refereeNotAssignedReturns403() throws Exception {
+        postResult(otherRefereeToken, entries.get(0).getEntryId(), (short) 1, null)
                 .andExpect(status().isForbidden());
     }
 
@@ -250,7 +292,7 @@ class RaceResultIntegrationTests {
 
     @Test
     void invalidRaceStatusReturns400() throws Exception {
-        Race scheduledRace = createRace(race.getStaff(), RaceStatus.SCHEDULED, "Scheduled Result Race " + System.nanoTime());
+        Race scheduledRace = createRace(race.getStaff(), race.getReferee(), RaceStatus.SCHEDULED, "Scheduled Result Race " + System.nanoTime());
         RaceEntry scheduledEntry = createEntry(scheduledRace, entries.get(0).getHorse(), entries.get(0).getJockey(), entries.get(0).getRegistration().getSubmittedBy(), (short) 9);
 
         postResult(adminToken, scheduledEntry.getEntryId(), (short) 1, null)
@@ -264,6 +306,16 @@ class RaceResultIntegrationTests {
         raceEntryRepository.save(entry);
 
         postResult(adminToken, entry.getEntryId(), (short) 1, null)
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void assignedRefereeCannotRecordScratchedEntry() throws Exception {
+        RaceEntry entry = entries.get(0);
+        entry.setEntryStatus("scratched");
+        raceEntryRepository.save(entry);
+
+        postResult(assignedRefereeToken, entry.getEntryId(), (short) 1, null)
                 .andExpect(status().isBadRequest());
     }
 
@@ -401,7 +453,7 @@ class RaceResultIntegrationTests {
                 .build());
     }
 
-    private Race createRace(Staff staff, RaceStatus status, String raceName) {
+    private Race createRace(Staff staff, Referee referee, RaceStatus status, String raceName) {
         Season season = seasonRepository.save(Season.builder()
                 .seasonName(raceName + " Season")
                 .startDate(LocalDate.now())
@@ -437,6 +489,7 @@ class RaceResultIntegrationTests {
                 .raceMeeting(meeting)
                 .raceCondition(condition)
                 .staff(staff)
+                .referee(referee)
                 .raceName(raceName)
                 .raceNo((short) 1)
                 .scheduledTime(LocalDateTime.now().plusDays(7))

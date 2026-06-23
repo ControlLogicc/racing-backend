@@ -7,6 +7,7 @@ import com.solofounder.horseracing.model.Jockey;
 import com.solofounder.horseracing.model.Race;
 import com.solofounder.horseracing.model.RaceEntry;
 import com.solofounder.horseracing.model.RaceResult;
+import com.solofounder.horseracing.model.Referee;
 import com.solofounder.horseracing.model.Staff;
 import com.solofounder.horseracing.model.User;
 import com.solofounder.horseracing.model.enums.RaceResultStatus;
@@ -17,6 +18,7 @@ import com.solofounder.horseracing.repository.PrizeStructureRepository;
 import com.solofounder.horseracing.repository.RaceEntryRepository;
 import com.solofounder.horseracing.repository.RaceRepository;
 import com.solofounder.horseracing.repository.RaceResultRepository;
+import com.solofounder.horseracing.repository.RefereeRepository;
 import com.solofounder.horseracing.repository.StaffRepository;
 import com.solofounder.horseracing.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +54,7 @@ public class RaceResultService {
     private final RaceRepository raceRepository;
     private final HorseRepository horseRepository;
     private final StaffRepository staffRepository;
+    private final RefereeRepository refereeRepository;
     private final UserRepository userRepository;
     private final PrizeStructureRepository prizeStructureRepository;
 
@@ -72,6 +75,9 @@ public class RaceResultService {
         }
         if (currentUser.getRole() == Role.STAFF) {
             requireAssignedStaff(currentUser, race);
+        }
+        if (currentUser.getRole() == Role.REFEREE) {
+            requireAssignedReferee(currentUser, race);
         }
         if (raceResultRepository.existsByEntryEntryId(entry.getEntryId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Race entry already has a result");
@@ -122,7 +128,7 @@ public class RaceResultService {
     }
 
     private void requireRecorderRole(User user) {
-        if (user.getRole() != Role.ADMIN && user.getRole() != Role.STAFF) {
+        if (user.getRole() != Role.ADMIN && user.getRole() != Role.STAFF && user.getRole() != Role.REFEREE) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
         }
     }
@@ -131,6 +137,14 @@ public class RaceResultService {
         Staff staff = staffRepository.findByUserUserId(user.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Staff profile not found"));
         if (race.getStaff() == null || !race.getStaff().getStaffId().equals(staff.getStaffId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+    }
+
+    private void requireAssignedReferee(User user, Race race) {
+        Referee referee = refereeRepository.findByUserUserId(user.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Referee profile not found"));
+        if (race.getReferee() == null || !race.getReferee().getRefereeId().equals(referee.getRefereeId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
         }
     }
