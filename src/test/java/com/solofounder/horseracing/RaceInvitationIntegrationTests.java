@@ -97,6 +97,7 @@ public class RaceInvitationIntegrationTests {
     void setupData() throws Exception {
         // Clear all invitation records
         refereeReportRepository.deleteAll();
+        raceEntryRepository.deleteAll();
         raceInvitationRepository.deleteAll();
         raceRegistrationRepository.deleteAll();
         raceRepository.deleteAll();

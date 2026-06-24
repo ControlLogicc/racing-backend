@@ -115,6 +115,9 @@ class HorsesRacingApplicationTests {
         private com.solofounder.horseracing.repository.RaceInvitationRepository raceInvitationRepository;
 
         @Autowired
+        private com.solofounder.horseracing.repository.RaceEntryRepository raceEntryRepository;
+
+        @Autowired
         private com.solofounder.horseracing.repository.RaceRegistrationRepository raceRegistrationRepository;
 
         @Autowired
@@ -125,6 +128,7 @@ class HorsesRacingApplicationTests {
         @BeforeEach
         void cleanDatabase() {
                 refereeReportRepository.deleteAll();
+                raceEntryRepository.deleteAll();
                 raceInvitationRepository.deleteAll();
                 raceRegistrationRepository.deleteAll();
                 // Clean up test horses owned by test users to prevent foreign key errors

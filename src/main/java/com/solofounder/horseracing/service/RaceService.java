@@ -329,6 +329,7 @@ public class RaceService {
                 .meetingId(race.getRaceMeeting().getMeetingId())
                 .meetingName(race.getRaceMeeting().getMeetingName())
                 .meetingDate(race.getRaceMeeting().getMeetingDate())
+                .racecourseId(race.getRaceMeeting().getRacecourse().getRacecourseId())
                 .racecourseName(race.getRaceMeeting().getRacecourse().getRacecourseName())
                 .conditionId(race.getRaceCondition().getConditionId())
                 .conditionName(race.getRaceCondition().getConditionName())

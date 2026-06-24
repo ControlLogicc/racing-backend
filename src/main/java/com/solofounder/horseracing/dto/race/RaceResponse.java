@@ -24,6 +24,7 @@ public class RaceResponse {
     private LocalDateTime registrationCloseAt;
     private String meetingName;
     private java.time.LocalDate meetingDate;
+    private Long racecourseId;
     private String racecourseName;
     private Integer distanceMeters;
     private String trackType;

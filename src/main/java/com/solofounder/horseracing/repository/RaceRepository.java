@@ -14,6 +14,17 @@ public interface RaceRepository extends JpaRepository<Race, Long> {
 
     List<Race> findByStaffStaffId(Long staffId);
 
+    @Query("SELECT r FROM Race r " +
+            "JOIN FETCH r.raceMeeting m " +
+            "JOIN FETCH m.racecourse " +
+            "JOIN FETCH r.raceCondition " +
+            "LEFT JOIN FETCH r.staff s " +
+            "LEFT JOIN FETCH s.user " +
+            "LEFT JOIN FETCH r.referee rf " +
+            "LEFT JOIN FETCH rf.user " +
+            "WHERE rf.refereeId = :refereeId")
+    List<Race> findByRefereeRefereeIdWithDetails(@Param("refereeId") Long refereeId);
+
     @Query(value = "SELECT COUNT(*) FROM dbo.race_registration WHERE race_id = :raceId", nativeQuery = true)
     long countRaceRegistrations(@Param("raceId") Long raceId);
 
