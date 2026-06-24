@@ -14,6 +14,8 @@ public interface RaceRepository extends JpaRepository<Race, Long> {
 
     List<Race> findByStaffStaffId(Long staffId);
 
+    List<Race> findByRefereeRefereeId(Long refereeId);
+
     @Query(value = "SELECT COUNT(*) FROM dbo.race_registration WHERE race_id = :raceId", nativeQuery = true)
     long countRaceRegistrations(@Param("raceId") Long raceId);
 

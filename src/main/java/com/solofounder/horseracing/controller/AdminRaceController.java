@@ -64,7 +64,7 @@ public class AdminRaceController {
     }
 
     @PostMapping("/{raceId}/recalculate-prizes")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ResponseEntity<RecalculatePrizesResponse> recalculatePrizes(@PathVariable Long raceId) {
         return ResponseEntity.ok(prizeCalculationService.recalculatePrizes(raceId));
     }

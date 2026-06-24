@@ -21,9 +21,18 @@ public class StaffController {
 
     private final StaffService staffService;
 
+    // ─── Admin: lấy toàn bộ danh sách staff ──────────────────────────────────
+    @GetMapping("/all")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<StaffResponse>> getAllStaff() {
+        return ResponseEntity.ok(staffService.getAllStaff());
+    }
+
+    // ─── Staff: lấy profile của chính mình ───────────────────────────────────
     @GetMapping
-    public ResponseEntity<StaffResponse> getProfile() {
-        return ResponseEntity.ok(staffService.getCurrentStaffProfile());
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<?> getProfileOrAllStaff() {
+        return ResponseEntity.ok(staffService.getCurrentProfileOrAllStaff());
     }
 
     @GetMapping("/races")

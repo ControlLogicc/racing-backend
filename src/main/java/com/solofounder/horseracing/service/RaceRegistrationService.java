@@ -80,6 +80,14 @@ public class RaceRegistrationService {
         return toResponse(raceRegistrationRepository.save(registration));
     }
 
+    public List<RegistrationResponse> getOwnerRegistrations() {
+        User owner = getCurrentUser();
+        requireRole(owner, Role.OWNER);
+        return raceRegistrationRepository.findBySubmittedByUserId(owner.getUserId()).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     public List<RegistrationResponse> getRegistrationsForRace(Long raceId) {
         User currentUser = getCurrentUser();
         Race race = raceRepository.findById(raceId)

@@ -3,10 +3,12 @@ package com.solofounder.horseracing.service;
 import com.solofounder.horseracing.dto.race.RaceRequest;
 import com.solofounder.horseracing.dto.race.RaceResponse;
 import com.solofounder.horseracing.model.*;
+import com.solofounder.horseracing.model.enums.RaceRegistrationStatus;
 import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -28,14 +30,17 @@ public class RaceService {
     private final StaffRepository staffRepository;
     private final RefereeRepository refereeRepository;
     private final UserRepository userRepository;
+    private final RaceRegistrationRepository raceRegistrationRepository;
 
     public List<RaceResponse> getAllRaces() {
         return raceRepository.findAll().stream()
+                .map(race -> syncRaceStatusBySchedule(race, LocalDateTime.now()))
                 .map(this::toResponse)
                 .toList();
     }
 
     public boolean isOpenForRegistration(Race race, LocalDateTime now) {
+        race = syncRaceStatusBySchedule(race, now);
         return race != null
                 && race.getStatus() == RaceStatus.OPEN_FOR_ENTRY
                 && race.getRegistrationOpenAt() != null
@@ -46,14 +51,21 @@ public class RaceService {
 
     public List<RaceResponse> getOpenRaces() {
         LocalDateTime now = LocalDateTime.now();
-        return raceRepository.findByStatus(RaceStatus.OPEN_FOR_ENTRY).stream()
-                .filter(r -> isOpenForRegistration(r, now))
+        return raceRepository.findAll().stream()
+                .map(race -> syncRaceStatusBySchedule(race, now))
+                .filter(race -> race.getStatus() == RaceStatus.OPEN_FOR_ENTRY)
                 .map(this::toResponse)
                 .toList();
     }
 
     public RaceResponse getRace(Long raceId) {
-        return toResponse(findRace(raceId));
+        return toResponse(syncRaceStatusBySchedule(findRace(raceId), LocalDateTime.now()));
+    }
+
+    @Scheduled(fixedDelayString = "${application.race.status-sync-interval-ms:60000}")
+    public void syncRaceStatusesBySchedule() {
+        LocalDateTime now = LocalDateTime.now();
+        raceRepository.findAll().forEach(race -> syncRaceStatusBySchedule(race, now));
     }
 
     public RaceResponse createRace(RaceRequest request) {
@@ -150,7 +162,7 @@ public class RaceService {
     }
 
     public RaceResponse updateRaceStatus(Long raceId, String newStatusStr) {
-        Race race = findRace(raceId);
+        Race race = syncRaceStatusBySchedule(findRace(raceId), LocalDateTime.now());
         RaceStatus newStatus;
         try {
             newStatus = parseRaceStatus(newStatusStr);
@@ -171,6 +183,9 @@ public class RaceService {
         }
 
         RaceStatus oldStatus = race.getStatus();
+        if (oldStatus == newStatus && (newStatus == RaceStatus.OPEN_FOR_ENTRY || newStatus == RaceStatus.CLOSED_FOR_ENTRY)) {
+            return toResponse(race);
+        }
 
         // Allowed transitions validation
         boolean allowed = false;
@@ -192,8 +207,7 @@ public class RaceService {
             throw new IllegalArgumentException("Race status cannot change from " + oldStatus + " to " + newStatus);
         }
 
-        // Validation before opening: SCHEDULED -> OPEN_FOR_ENTRY
-        if (newStatus == RaceStatus.OPEN_FOR_ENTRY) {
+        if (newStatus == RaceStatus.SCHEDULED) {
             if (race.getRegistrationOpenAt() == null || race.getRegistrationCloseAt() == null) {
                 throw new IllegalArgumentException("Registration dates are not set");
             }
@@ -203,9 +217,22 @@ public class RaceService {
             if (!race.getRegistrationCloseAt().isBefore(race.getScheduledTime())) {
                 throw new IllegalArgumentException("Registration close time must be before race scheduled time");
             }
+        }
+
+        if (newStatus == RaceStatus.OPEN_FOR_ENTRY) {
             LocalDateTime now = LocalDateTime.now();
             if (now.isBefore(race.getRegistrationOpenAt()) || now.isAfter(race.getRegistrationCloseAt())) {
                 throw new IllegalArgumentException("Current time must be within registration period to open entry");
+            }
+            if (isRaceFull(race)) {
+                throw new IllegalArgumentException("Race registration capacity reached");
+            }
+        }
+
+        if (newStatus == RaceStatus.RUNNING) {
+            LocalDateTime now = LocalDateTime.now();
+            if (race.getRegistrationCloseAt() != null && now.isBefore(race.getRegistrationCloseAt())) {
+                throw new IllegalArgumentException("Race cannot start before registration close time");
             }
         }
 
@@ -348,5 +375,45 @@ public class RaceService {
                 .createdAt(race.getCreatedAt())
                 .updatedAt(race.getUpdatedAt())
                 .build();
+    }
+
+    private boolean isRaceFull(Race race) {
+        RaceCondition condition = race.getRaceCondition();
+        if (condition == null || condition.getMaxEntries() == null) {
+            return false;
+        }
+        long approvedCount = raceRegistrationRepository.countByRaceRaceIdAndStatus(
+                race.getRaceId(),
+                RaceRegistrationStatus.APPROVED
+        );
+        return approvedCount >= condition.getMaxEntries();
+    }
+
+    private Race syncRaceStatusBySchedule(Race race, LocalDateTime now) {
+        if (race == null) {
+            return null;
+        }
+        RaceStatus current = race.getStatus();
+        if (current != RaceStatus.SCHEDULED && current != RaceStatus.OPEN_FOR_ENTRY) {
+            return race;
+        }
+        if (race.getRegistrationOpenAt() == null || race.getRegistrationCloseAt() == null) {
+            return race;
+        }
+
+        RaceStatus nextStatus = current;
+        if (isRaceFull(race) || now.isAfter(race.getRegistrationCloseAt())) {
+            nextStatus = RaceStatus.CLOSED_FOR_ENTRY;
+        } else if (current == RaceStatus.SCHEDULED
+                && !now.isBefore(race.getRegistrationOpenAt())
+                && !now.isAfter(race.getRegistrationCloseAt())) {
+            nextStatus = RaceStatus.OPEN_FOR_ENTRY;
+        }
+
+        if (nextStatus != current) {
+            race.setStatus(nextStatus);
+            return raceRepository.save(race);
+        }
+        return race;
     }
 }

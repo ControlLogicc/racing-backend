@@ -57,6 +57,9 @@ public class RaceEntry {
     @Column(name = "weight_check_status", length = 25)
     private String weightCheckStatus;
 
+    @Column(name = "pre_check_note", length = 500)
+    private String preCheckNote;
+
     @Column(name = "entry_status", nullable = false, length = 20)
     private String entryStatus;
 
@@ -72,7 +75,7 @@ public class RaceEntry {
         this.createdAt = now;
         this.updatedAt = now;
         if (this.entryStatus == null) {
-            this.entryStatus = "declared";
+            this.entryStatus = "DECLARED";
         }
     }
 

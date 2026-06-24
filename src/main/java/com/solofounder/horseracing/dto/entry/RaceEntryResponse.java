@@ -23,9 +23,11 @@ public class RaceEntryResponse {
     private BigDecimal handicapWeight;
     private BigDecimal actualWeight;
     private String weightCheckStatus;
+    private String preCheckNote;
     private String entryStatus;
     private Long confirmedByStaffId;
     private String confirmedByStaffName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private LocalDateTime scheduledTime;
 }

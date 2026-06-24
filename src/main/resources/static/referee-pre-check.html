@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Referee Pre-check</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f5f7fb;
+            --panel: #ffffff;
+            --ink: #172033;
+            --muted: #657085;
+            --line: #d9deea;
+            --accent: #176b87;
+            --accent-strong: #0f5268;
+            --danger: #b3261e;
+            --ok: #167245;
+            --warn: #8a5a00;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--ink);
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        main {
+            width: min(1180px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 24px 0 40px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: flex-end;
+            margin-bottom: 18px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 26px;
+            font-weight: 700;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 9px 10px;
+            font-size: 14px;
+            background: #fff;
+            color: var(--ink);
+        }
+
+        textarea {
+            min-height: 38px;
+            resize: vertical;
+        }
+
+        button {
+            border: 0;
+            border-radius: 6px;
+            background: var(--accent);
+            color: #fff;
+            padding: 10px 14px;
+            font-weight: 700;
+            cursor: pointer;
+            min-height: 38px;
+        }
+
+        button:hover {
+            background: var(--accent-strong);
+        }
+
+        button.secondary {
+            background: #e8edf4;
+            color: var(--ink);
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .auth-row,
+        .race-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 12px;
+            align-items: end;
+        }
+
+        .race-row {
+            grid-template-columns: minmax(220px, 1fr) auto;
+        }
+
+        .status {
+            color: var(--muted);
+            font-size: 14px;
+            min-height: 20px;
+        }
+
+        .status.error {
+            color: var(--danger);
+        }
+
+        .status.ok {
+            color: var(--ok);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        th,
+        td {
+            border-bottom: 1px solid var(--line);
+            padding: 10px 8px;
+            text-align: left;
+            vertical-align: top;
+            font-size: 14px;
+        }
+
+        th {
+            color: var(--muted);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0;
+        }
+
+        .badge {
+            display: inline-block;
+            min-width: 74px;
+            text-align: center;
+            border-radius: 999px;
+            padding: 4px 8px;
+            font-size: 12px;
+            font-weight: 700;
+            background: #eef2f7;
+            color: var(--muted);
+        }
+
+        .badge.passed {
+            background: #e7f5ed;
+            color: var(--ok);
+        }
+
+        .badge.failed,
+        .badge.withdrawn {
+            background: #fdecea;
+            color: var(--danger);
+        }
+
+        .badge.declared {
+            background: #fff4d8;
+            color: var(--warn);
+        }
+
+        .check-grid {
+            display: grid;
+            grid-template-columns: 90px 90px minmax(130px, 1fr) auto;
+            gap: 8px;
+            align-items: start;
+        }
+
+        .empty {
+            padding: 24px;
+            text-align: center;
+            color: var(--muted);
+        }
+
+        @media (max-width: 760px) {
+            header,
+            .auth-row,
+            .race-row,
+            .check-grid {
+                grid-template-columns: 1fr;
+            }
+
+            table,
+            thead,
+            tbody,
+            th,
+            td,
+            tr {
+                display: block;
+            }
+
+            thead {
+                display: none;
+            }
+
+            tr {
+                border-bottom: 1px solid var(--line);
+                padding: 10px 0;
+            }
+
+            td {
+                border: 0;
+                padding: 6px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+<main>
+    <header>
+        <div>
+            <h1>Referee Pre-check</h1>
+            <div id="profile" class="status">Not connected</div>
+        </div>
+        <button id="clearToken" class="secondary" type="button">Clear token</button>
+    </header>
+
+    <section class="panel">
+        <div class="auth-row">
+            <div>
+                <label for="token">Bearer token</label>
+                <input id="token" type="password" autocomplete="off" placeholder="Paste JWT token">
+            </div>
+            <button id="connect" type="button">Connect</button>
+        </div>
+        <div id="message" class="status"></div>
+    </section>
+
+    <section class="panel">
+        <div class="race-row">
+            <div>
+                <label for="raceSelect">Assigned race</label>
+                <select id="raceSelect"></select>
+            </div>
+            <button id="loadEntries" type="button">Load entries</button>
+        </div>
+    </section>
+
+    <section class="panel">
+        <table>
+            <thead>
+            <tr>
+                <th style="width: 18%">Horse</th>
+                <th style="width: 18%">Jockey</th>
+                <th style="width: 9%">Gate</th>
+                <th style="width: 11%">Status</th>
+                <th>Pre-check</th>
+            </tr>
+            </thead>
+            <tbody id="entriesBody">
+            <tr>
+                <td colspan="5" class="empty">Connect and load a race.</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+</main>
+
+<script>
+    const tokenInput = document.getElementById("token");
+    const connectButton = document.getElementById("connect");
+    const clearTokenButton = document.getElementById("clearToken");
+    const loadEntriesButton = document.getElementById("loadEntries");
+    const raceSelect = document.getElementById("raceSelect");
+    const entriesBody = document.getElementById("entriesBody");
+    const message = document.getElementById("message");
+    const profile = document.getElementById("profile");
+
+    tokenInput.value = localStorage.getItem("refereeToken") || "";
+
+    function setMessage(text, type = "") {
+        message.textContent = text;
+        message.className = `status ${type}`.trim();
+    }
+
+    function authHeaders() {
+        const raw = tokenInput.value.trim();
+        const token = raw.startsWith("Bearer ") ? raw : `Bearer ${raw}`;
+        return {
+            "Authorization": token,
+            "Content-Type": "application/json"
+        };
+    }
+
+    async function api(path, options = {}) {
+        const response = await fetch(path, {
+            ...options,
+            headers: {
+                ...authHeaders(),
+                ...(options.headers || {})
+            }
+        });
+        if (!response.ok) {
+            let detail = response.statusText;
+            try {
+                const body = await response.json();
+                detail = body.error || detail;
+            } catch (_) {
+                // keep status text
+            }
+            throw new Error(detail);
+        }
+        return response.json();
+    }
+
+    async function connect() {
+        try {
+            localStorage.setItem("refereeToken", tokenInput.value.trim());
+            const me = await api("/api/referees/me");
+            profile.textContent = `${me.fullName} (${me.licenseNo})`;
+            await loadRaces();
+            setMessage("Connected.", "ok");
+        } catch (error) {
+            profile.textContent = "Not connected";
+            setMessage(error.message, "error");
+        }
+    }
+
+    async function loadRaces() {
+        const races = await api("/api/referees/races");
+        raceSelect.innerHTML = "";
+        if (!races.length) {
+            raceSelect.innerHTML = "<option value=\"\">No assigned races</option>";
+            renderEntries([]);
+            return;
+        }
+        for (const race of races) {
+            const option = document.createElement("option");
+            option.value = race.raceId;
+            option.textContent = `${race.raceName} - ${race.status} - ${formatDate(race.scheduledTime)}`;
+            raceSelect.appendChild(option);
+        }
+        await loadEntries();
+    }
+
+    async function loadEntries() {
+        const raceId = raceSelect.value;
+        if (!raceId) {
+            renderEntries([]);
+            return;
+        }
+        try {
+            const entries = await api(`/api/entries/race/${raceId}`);
+            renderEntries(entries);
+            setMessage(`Loaded ${entries.length} entries.`, "ok");
+        } catch (error) {
+            setMessage(error.message, "error");
+        }
+    }
+
+    function renderEntries(entries) {
+        entriesBody.innerHTML = "";
+        if (!entries.length) {
+            entriesBody.innerHTML = "<tr><td colspan=\"5\" class=\"empty\">No entries for this race.</td></tr>";
+            return;
+        }
+        for (const entry of entries) {
+            const tr = document.createElement("tr");
+            const status = (entry.entryStatus || "DECLARED").toLowerCase();
+            tr.innerHTML = `
+                <td>${escapeHtml(entry.horseName || "")}</td>
+                <td>${escapeHtml(entry.jockeyName || "")}</td>
+                <td>${entry.gateNumber ?? ""}</td>
+                <td><span class="badge ${status}">${escapeHtml(entry.entryStatus || "DECLARED")}</span></td>
+                <td>
+                    <div class="check-grid">
+                        <input data-field="actual" type="number" step="0.01" min="0.01" placeholder="Actual" value="${entry.actualWeight ?? ""}">
+                        <input data-field="handicap" type="number" step="0.01" min="0.01" placeholder="Handicap" value="${entry.handicapWeight ?? ""}">
+                        <textarea data-field="note" placeholder="Note">${escapeHtml(entry.preCheckNote || "")}</textarea>
+                        <button type="button" data-entry="${entry.entryId}">Check</button>
+                    </div>
+                </td>
+            `;
+            tr.querySelector("button").addEventListener("click", () => submitCheck(entry.entryId, tr));
+            entriesBody.appendChild(tr);
+        }
+    }
+
+    async function submitCheck(entryId, row) {
+        const actualWeight = row.querySelector("[data-field='actual']").value;
+        const handicapWeight = row.querySelector("[data-field='handicap']").value;
+        const note = row.querySelector("[data-field='note']").value;
+        try {
+            await api(`/api/entries/${entryId}/pre-check`, {
+                method: "PUT",
+                body: JSON.stringify({
+                    actualWeight: Number(actualWeight),
+                    handicapWeight: handicapWeight ? Number(handicapWeight) : null,
+                    note
+                })
+            });
+            await loadEntries();
+            setMessage("Pre-check saved.", "ok");
+        } catch (error) {
+            setMessage(error.message, "error");
+        }
+    }
+
+    function formatDate(value) {
+        if (!value) return "No schedule";
+        return value.replace("T", " ").slice(0, 16);
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+    }
+
+    connectButton.addEventListener("click", connect);
+    loadEntriesButton.addEventListener("click", loadEntries);
+    clearTokenButton.addEventListener("click", () => {
+        localStorage.removeItem("refereeToken");
+        tokenInput.value = "";
+        profile.textContent = "Not connected";
+        raceSelect.innerHTML = "";
+        renderEntries([]);
+        setMessage("Token cleared.");
+    });
+
+    if (tokenInput.value) {
+        connect();
+    }
+</script>
+</body>
+</html>

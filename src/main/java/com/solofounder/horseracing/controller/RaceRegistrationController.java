@@ -25,6 +25,12 @@ public class RaceRegistrationController {
         return ResponseEntity.status(HttpStatus.CREATED).body(raceRegistrationService.createRegistration(request));
     }
 
+    @GetMapping
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<RegistrationResponse>> getOwnerRegistrations() {
+        return ResponseEntity.ok(raceRegistrationService.getOwnerRegistrations());
+    }
+
     @GetMapping("/{raceId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ResponseEntity<List<RegistrationResponse>> getRegistrationsForRace(@PathVariable Long raceId) {

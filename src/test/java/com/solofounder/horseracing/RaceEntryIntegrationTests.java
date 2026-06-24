@@ -334,7 +334,7 @@ public class RaceEntryIntegrationTests {
     void testCreateEntrySuccess() throws Exception {
         CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg1.getRegistrationId())
-                .invitationId(acceptedInv1.getInvitationId())
+                .jockeyId(jockeyProfile1.getJockeyId())
                 .gateNumber((short) 1)
                 .handicapWeight(new BigDecimal("50.5"))
                 .build();
@@ -362,7 +362,7 @@ public class RaceEntryIntegrationTests {
     void testCreateEntryAdminSuccess() throws Exception {
         CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg2.getRegistrationId())
-                .invitationId(acceptedInv2.getInvitationId())
+                .jockeyId(jockeyProfile2.getJockeyId())
                 .gateNumber((short) 2)
                 .handicapWeight(new BigDecimal("52.0"))
                 .build();
@@ -387,7 +387,7 @@ public class RaceEntryIntegrationTests {
 
         CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg1.getRegistrationId())
-                .invitationId(acceptedInv1.getInvitationId())
+                .jockeyId(jockeyProfile1.getJockeyId())
                 .gateNumber((short) 1)
                 .handicapWeight(new BigDecimal("50.5"))
                 .build();
@@ -407,7 +407,7 @@ public class RaceEntryIntegrationTests {
 
         CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg1.getRegistrationId())
-                .invitationId(acceptedInv1.getInvitationId())
+                .jockeyId(jockeyProfile1.getJockeyId())
                 .gateNumber((short) 1)
                 .handicapWeight(new BigDecimal("50.5"))
                 .build();
@@ -423,7 +423,7 @@ public class RaceEntryIntegrationTests {
     void testCreateEntryDuplicateRegistrationFails() throws Exception {
         CreateRaceEntryRequest request1 = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg1.getRegistrationId())
-                .invitationId(acceptedInv1.getInvitationId())
+                .jockeyId(jockeyProfile1.getJockeyId())
                 .gateNumber((short) 1)
                 .handicapWeight(new BigDecimal("50.5"))
                 .build();
@@ -437,7 +437,7 @@ public class RaceEntryIntegrationTests {
         // Try to create again for same registration
         CreateRaceEntryRequest request2 = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg1.getRegistrationId())
-                .invitationId(acceptedInv1.getInvitationId())
+                .jockeyId(jockeyProfile1.getJockeyId())
                 .gateNumber((short) 2)
                 .handicapWeight(new BigDecimal("50.5"))
                 .build();
@@ -453,7 +453,7 @@ public class RaceEntryIntegrationTests {
     void testCreateEntryDuplicateGateFails() throws Exception {
         CreateRaceEntryRequest request1 = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg1.getRegistrationId())
-                .invitationId(acceptedInv1.getInvitationId())
+                .jockeyId(jockeyProfile1.getJockeyId())
                 .gateNumber((short) 3)
                 .handicapWeight(new BigDecimal("50.5"))
                 .build();
@@ -467,7 +467,7 @@ public class RaceEntryIntegrationTests {
         // Try to create another entry using gate 3 in same race
         CreateRaceEntryRequest request2 = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg2.getRegistrationId())
-                .invitationId(acceptedInv2.getInvitationId())
+                .jockeyId(jockeyProfile2.getJockeyId())
                 .gateNumber((short) 3)
                 .handicapWeight(new BigDecimal("52.0"))
                 .build();
@@ -483,7 +483,7 @@ public class RaceEntryIntegrationTests {
     void testCreateEntryDuplicateJockeyFails() throws Exception {
         CreateRaceEntryRequest request1 = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg1.getRegistrationId())
-                .invitationId(acceptedInv1.getInvitationId())
+                .jockeyId(jockeyProfile1.getJockeyId())
                 .gateNumber((short) 4)
                 .handicapWeight(new BigDecimal("50.5"))
                 .build();
@@ -500,7 +500,7 @@ public class RaceEntryIntegrationTests {
 
         CreateRaceEntryRequest request2 = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg2.getRegistrationId())
-                .invitationId(acceptedInv2.getInvitationId())
+                .jockeyId(jockeyProfile1.getJockeyId())
                 .gateNumber((short) 5)
                 .handicapWeight(new BigDecimal("52.0"))
                 .build();
@@ -516,7 +516,7 @@ public class RaceEntryIntegrationTests {
     void testGetEntryAndEntriesForRace() throws Exception {
         CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg1.getRegistrationId())
-                .invitationId(acceptedInv1.getInvitationId())
+                .jockeyId(jockeyProfile1.getJockeyId())
                 .gateNumber((short) 1)
                 .handicapWeight(new BigDecimal("50.5"))
                 .build();
@@ -544,7 +544,7 @@ public class RaceEntryIntegrationTests {
     void testUpdateWeightSuccess() throws Exception {
         CreateRaceEntryRequest createReq = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg1.getRegistrationId())
-                .invitationId(acceptedInv1.getInvitationId())
+                .jockeyId(jockeyProfile1.getJockeyId())
                 .gateNumber((short) 1)
                 .handicapWeight(new BigDecimal("50.5"))
                 .build();
@@ -725,7 +725,7 @@ public class RaceEntryIntegrationTests {
     void testUpdateStatusSuccess() throws Exception {
         CreateRaceEntryRequest createReq = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg1.getRegistrationId())
-                .invitationId(acceptedInv1.getInvitationId())
+                .jockeyId(jockeyProfile1.getJockeyId())
                 .gateNumber((short) 1)
                 .handicapWeight(new BigDecimal("50.5"))
                 .build();
@@ -743,7 +743,7 @@ public class RaceEntryIntegrationTests {
                 .build();
 
         MvcResult updatedResult = mockMvc.perform(put("/api/entries/" + created.getEntryId() + "/status")
-                .header("Authorization", staffToken)
+                .header("Authorization", adminToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(statusReq)))
                 .andExpect(status().isOk())
@@ -754,10 +754,38 @@ public class RaceEntryIntegrationTests {
     }
 
     @Test
+    void testUpdateStatusStaffForbidden() throws Exception {
+        CreateRaceEntryRequest createReq = CreateRaceEntryRequest.builder()
+                .registrationId(approvedReg1.getRegistrationId())
+                .jockeyId(jockeyProfile1.getJockeyId())
+                .gateNumber((short) 1)
+                .handicapWeight(new BigDecimal("50.5"))
+                .build();
+
+        MvcResult result = mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(createReq)))
+                .andExpect(status().isOk())
+                .andReturn();
+        RaceEntryResponse created = objectMapper.readValue(result.getResponse().getContentAsString(), RaceEntryResponse.class);
+
+        UpdateStatusRequest statusReq = UpdateStatusRequest.builder()
+                .status("scratched")
+                .build();
+
+        mockMvc.perform(put("/api/entries/" + created.getEntryId() + "/status")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(statusReq)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void testUnauthorizedRoleAccessFails() throws Exception {
         CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg1.getRegistrationId())
-                .invitationId(acceptedInv1.getInvitationId())
+                .jockeyId(jockeyProfile1.getJockeyId())
                 .gateNumber((short) 1)
                 .handicapWeight(new BigDecimal("50.5"))
                 .build();

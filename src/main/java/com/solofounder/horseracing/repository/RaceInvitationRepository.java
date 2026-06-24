@@ -23,6 +23,9 @@ public interface RaceInvitationRepository extends JpaRepository<RaceInvitation, 
     Optional<RaceInvitation> findByRaceRegistrationRegistrationIdAndInvitationStatus(
             Long registrationId, RaceInvitationStatus status);
 
+    Optional<RaceInvitation> findByRaceRegistrationRegistrationIdAndJockeyJockeyIdAndInvitationStatus(
+            Long registrationId, Long jockeyId, RaceInvitationStatus status);
+
     List<RaceInvitation> findByRaceRegistrationHorseOwnerUserId(Long userId);
 
     List<RaceInvitation> findByRaceRegistrationHorseOwnerUserIdAndInvitationStatus(

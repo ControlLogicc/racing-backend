@@ -102,10 +102,10 @@ public class RaceConditionService {
 
     private Short validateMinEntries(Short minEntries) {
         if (minEntries == null) {
-            return 3;
+            return 8;
         }
-        if (minEntries <= 0) {
-            throw new IllegalArgumentException("Min entries must be greater than 0");
+        if (minEntries < 8 || minEntries > 14) {
+            throw new IllegalArgumentException("Min entries must be between 8 and 14");
         }
         return minEntries;
     }
@@ -114,8 +114,8 @@ public class RaceConditionService {
         if (maxEntries == null) {
             return 14;
         }
-        if (maxEntries <= 0) {
-            throw new IllegalArgumentException("Max entries must be greater than 0");
+        if (maxEntries < 8 || maxEntries > 14) {
+            throw new IllegalArgumentException("Max entries must be between 8 and 14");
         }
         return maxEntries;
     }

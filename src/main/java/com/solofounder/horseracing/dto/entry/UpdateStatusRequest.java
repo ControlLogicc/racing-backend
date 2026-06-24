@@ -11,6 +11,6 @@ import lombok.*;
 public class UpdateStatusRequest {
 
     @NotBlank(message = "Status is required")
-    @Pattern(regexp = "^(disqualified|dnf|scratched|finished|running|ready|checked_in|declared)$", message = "Invalid entry status")
+    @Pattern(regexp = "(?i)^(declared|passed|failed|withdrawn|disqualified|dnf|scratched|finished|running|ready|checked_in)$", message = "Invalid entry status")
     private String status;
 }

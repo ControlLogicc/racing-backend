@@ -1,5 +1,6 @@
 package com.solofounder.horseracing.controller;
 
+import com.solofounder.horseracing.dto.race.RaceResponse;
 import com.solofounder.horseracing.dto.referee.CreateRefereeRequest;
 import com.solofounder.horseracing.dto.referee.RefereeResponse;
 import com.solofounder.horseracing.dto.referee.UpdateRefereeRequest;
@@ -18,6 +19,18 @@ import java.util.List;
 public class RefereeController {
 
     private final RefereeService refereeService;
+
+    @GetMapping("/me")
+    @PreAuthorize("hasRole('REFEREE')")
+    public ResponseEntity<RefereeResponse> getCurrentReferee() {
+        return ResponseEntity.ok(refereeService.getCurrentReferee());
+    }
+
+    @GetMapping("/races")
+    @PreAuthorize("hasRole('REFEREE')")
+    public ResponseEntity<List<RaceResponse>> getCurrentRefereeRaces() {
+        return ResponseEntity.ok(refereeService.getCurrentRefereeRaces());
+    }
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")

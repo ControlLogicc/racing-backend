@@ -4,9 +4,12 @@ import com.solofounder.horseracing.dto.race.RecalculatePrizesResponse;
 import com.solofounder.horseracing.model.*;
 import com.solofounder.horseracing.model.enums.RaceStatus;
 import com.solofounder.horseracing.model.enums.RaceResultStatus;
+import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -27,11 +30,14 @@ public class PrizeCalculationService {
     private final PrizeStructureRepository prizeStructureRepository;
     private final HorseRepository horseRepository;
     private final HorseService horseService;
+    private final UserRepository userRepository;
+    private final StaffRepository staffRepository;
 
     public RecalculatePrizesResponse recalculatePrizes(Long raceId) {
         // 1. Retrieve Race
         Race race = raceRepository.findById(raceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race not found"));
+        requireRecalculatePermission(race);
 
         // 2. Check Race status: must be OFFICIAL
         if (race.getStatus() != RaceStatus.OFFICIAL) {
@@ -50,10 +56,13 @@ public class PrizeCalculationService {
 
         // 4. Update result prizes & scores
         for (RaceResult result : results) {
-            boolean eligible = result.getPosition() != null && result.getPosition() > 0 
-                    && (result.getResultStatus() == RaceResultStatus.OFFICIAL || result.getResultStatus() == RaceResultStatus.AMENDED);
+            boolean eligible = result.getPosition() != null && result.getPosition() > 0
+                    && result.getResultStatus() != RaceResultStatus.DISQUALIFIED;
             
             if (eligible) {
+                if (result.getResultStatus() == RaceResultStatus.PROVISIONAL) {
+                    result.setResultStatus(RaceResultStatus.OFFICIAL);
+                }
                 Optional<PrizeStructure> prizeOpt = prizeStructureRepository.findByRaceRaceIdAndPosition(raceId, result.getPosition());
                 if (prizeOpt.isPresent()) {
                     PrizeStructure ps = prizeOpt.get();
@@ -84,10 +93,11 @@ public class PrizeCalculationService {
         raceResultRepository.saveAll(results);
 
         // 5. Recalculate scores, classes, wins for affected horses
-        List<RaceResultStatus> officialStatuses = List.of(RaceResultStatus.OFFICIAL, RaceResultStatus.AMENDED);
         for (Horse horse : affectedHorses) {
-            // Idempotent score calculation
-            BigDecimal currentScore = raceResultRepository.sumOfficialScoreByHorseId(horse.getHorseId(), RaceStatus.OFFICIAL, officialStatuses);
+            BigDecimal currentScore = raceResultRepository.sumScoreByHorseIdExcludingStatus(
+                    horse.getHorseId(),
+                    RaceResultStatus.DISQUALIFIED
+            );
             if (currentScore == null) {
                 currentScore = BigDecimal.ZERO;
             }
@@ -95,8 +105,10 @@ public class PrizeCalculationService {
             // Re-classify class using the existing helper method
             Short newClass = horseService.calculateHorseClass(currentScore);
 
-            // Idempotent wins count
-            long totalWins = raceResultRepository.countOfficialWinsByHorseId(horse.getHorseId(), RaceStatus.OFFICIAL, officialStatuses);
+            long totalWins = raceResultRepository.countWinsByHorseIdExcludingStatus(
+                    horse.getHorseId(),
+                    RaceResultStatus.DISQUALIFIED
+            );
 
             horse.setCurrentScore(currentScore);
             horse.setHorseClass(newClass);
@@ -114,5 +126,29 @@ public class PrizeCalculationService {
                 .totalScoreAwarded(totalScoreAwarded)
                 .message("Prize and score recalculation completed")
                 .build();
+    }
+
+    private void requireRecalculatePermission(Race race) {
+        User user = getCurrentUser();
+        if (user.getRole() == Role.ADMIN) {
+            return;
+        }
+        if (user.getRole() == Role.STAFF) {
+            Staff staff = staffRepository.findByUserUserId(user.getUserId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Staff profile not found"));
+            if (race.getStaff() != null && race.getStaff().getStaffId().equals(staff.getStaffId())) {
+                return;
+            }
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+    }
+
+    private User getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+        }
+        return userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized"));
     }
 }

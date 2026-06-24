@@ -58,4 +58,19 @@ public interface RaceResultRepository extends JpaRepository<RaceResult, Long> {
             @Param("horseId") Long horseId,
             @Param("raceStatus") RaceStatus raceStatus,
             @Param("statuses") List<RaceResultStatus> statuses);
+
+    @Query("SELECT COALESCE(SUM(r.scoreAwarded), 0) FROM RaceResult r " +
+           "WHERE r.entry.horse.horseId = :horseId " +
+           "AND r.resultStatus <> :excludedStatus")
+    BigDecimal sumScoreByHorseIdExcludingStatus(
+            @Param("horseId") Long horseId,
+            @Param("excludedStatus") RaceResultStatus excludedStatus);
+
+    @Query("SELECT COUNT(r) FROM RaceResult r " +
+           "WHERE r.entry.horse.horseId = :horseId " +
+           "AND r.resultStatus <> :excludedStatus " +
+           "AND r.position = 1")
+    long countWinsByHorseIdExcludingStatus(
+            @Param("horseId") Long horseId,
+            @Param("excludedStatus") RaceResultStatus excludedStatus);
 }
