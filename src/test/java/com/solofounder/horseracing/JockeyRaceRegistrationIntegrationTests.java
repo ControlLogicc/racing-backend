@@ -1,6 +1,7 @@
 package com.solofounder.horseracing;
 
 import com.solofounder.horseracing.config.JwtService;
+import com.solofounder.horseracing.dto.entry.CreateRaceEntryRequest;
 import com.solofounder.horseracing.dto.invitation.CreateInvitationRequest;
 import com.solofounder.horseracing.dto.jockey.CreateJockeyRaceRegistrationRequest;
 import com.solofounder.horseracing.dto.jockey.EligibleJockeyForInvitationResponse;
@@ -87,6 +88,7 @@ class JockeyRaceRegistrationIntegrationTests {
 
     private User owner;
     private User otherOwner;
+    private User admin;
     private User staffUser;
     private Jockey jockey;
     private Jockey otherJockey;
@@ -102,6 +104,7 @@ class JockeyRaceRegistrationIntegrationTests {
         String suffix = String.valueOf(System.nanoTime());
         owner = createUser("owner-" + suffix + "@jrr.test", "Owner", Role.OWNER);
         otherOwner = createUser("owner-other-" + suffix + "@jrr.test", "Other Owner", Role.OWNER);
+        admin = createUser("admin-" + suffix + "@jrr.test", "Admin", Role.ADMIN);
         staffUser = createUser("staff-" + suffix + "@jrr.test", "Staff", Role.STAFF);
         User jockeyUser = createUser("jockey-" + suffix + "@jrr.test", "Jockey", Role.JOCKEY);
         User otherJockeyUser = createUser("jockey-other-" + suffix + "@jrr.test", "Other Jockey", Role.JOCKEY);
@@ -340,7 +343,7 @@ class JockeyRaceRegistrationIntegrationTests {
     }
 
     @Test
-    void acceptingInvitationStillCreatesRaceEntry() throws Exception {
+    void acceptingInvitationOnlyMarksAcceptedAndDoesNotCreateRaceEntry() throws Exception {
         saveJockeyRegistration(jockey, openRace);
         CreateInvitationRequest request = CreateInvitationRequest.builder()
                 .raceRegistrationId(approvedRegistration.getRegistrationId())
@@ -365,9 +368,9 @@ class JockeyRaceRegistrationIntegrationTests {
                 acceptResult.getResponse().getContentAsString(),
                 InvitationResponse.class);
 
-        assertNotNull(accepted.getEntryId());
-        assertTrue(raceEntryRepository.findByRegistrationRegistrationId(
-                approvedRegistration.getRegistrationId()).isPresent());
+        assertEquals("ACCEPTED", accepted.getStatus());
+        assertFalse(raceEntryRepository.existsByRegistrationRegistrationId(
+                approvedRegistration.getRegistrationId()));
     }
 
     @Test
@@ -390,7 +393,7 @@ class JockeyRaceRegistrationIntegrationTests {
     }
 
     @Test
-    void acceptConflictDoesNotMarkInvitationAccepted() throws Exception {
+    void createEntryConflictDoesNotMarkInvitationUsed() throws Exception {
         saveJockeyRegistration(jockey, openRace);
         raceEntryRepository.save(RaceEntry.builder()
                 .race(openRace)
@@ -406,10 +409,20 @@ class JockeyRaceRegistrationIntegrationTests {
                 .build());
 
         mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/accept")
-                        .header("Authorization", token(jockey.getUser())))
+                .header("Authorization", token(jockey.getUser())))
+                .andExpect(status().isOk());
+
+        CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
+                .invitationId(invitation.getInvitationId())
+                .build();
+
+        mockMvc.perform(post("/api/entries")
+                        .header("Authorization", token(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict());
 
-        assertEquals(RaceInvitationStatus.SENT,
+        assertEquals(RaceInvitationStatus.ACCEPTED,
                 raceInvitationRepository.findById(invitation.getInvitationId()).orElseThrow().getInvitationStatus());
         assertFalse(raceEntryRepository.existsByRegistrationRegistrationId(
                 approvedRegistration.getRegistrationId()));

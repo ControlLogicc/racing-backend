@@ -336,6 +336,20 @@ public class RaceEntryIntegrationTests {
                 .invitationStatus(RaceInvitationStatus.ACCEPTED)
                 .sentAt(LocalDateTime.now())
                 .build());
+
+        jockeyRaceRegistrationRepository.save(JockeyRaceRegistration.builder()
+                .race(testRace)
+                .jockey(jockeyProfile1)
+                .status(JockeyRaceRegistrationStatus.REGISTERED)
+                .registeredAt(LocalDateTime.now())
+                .build());
+
+        jockeyRaceRegistrationRepository.save(JockeyRaceRegistration.builder()
+                .race(testRace)
+                .jockey(jockeyProfile2)
+                .status(JockeyRaceRegistrationStatus.REGISTERED)
+                .registeredAt(LocalDateTime.now())
+                .build());
     }
 
     @Test
@@ -357,8 +371,8 @@ public class RaceEntryIntegrationTests {
         RaceEntryResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), RaceEntryResponse.class);
         assertNotNull(response.getEntryId());
         assertEquals("declared", response.getEntryStatus());
-        assertEquals((short) 1, response.getGateNumber());
-        assertEquals(new BigDecimal("50.5"), response.getHandicapWeight());
+        assertNull(response.getGateNumber());
+        assertNull(response.getHandicapWeight());
         assertEquals(staffProfile.getStaffId(), response.getConfirmedByStaffId());
 
         // Verify Invitation is now USED
@@ -385,6 +399,39 @@ public class RaceEntryIntegrationTests {
         RaceEntryResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), RaceEntryResponse.class);
         assertNotNull(response.getEntryId());
         assertNull(response.getConfirmedByStaffId());
+    }
+
+    @Test
+    void testCreateSecondEntryInSameRaceDoesNotConflictWithNullGateNumber() throws Exception {
+        CreateRaceEntryRequest firstRequest = CreateRaceEntryRequest.builder()
+                .invitationId(acceptedInv1.getInvitationId())
+                .build();
+
+        MvcResult firstResult = mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(firstRequest)))
+                .andExpect(status().isOk())
+                .andReturn();
+        RaceEntryResponse firstResponse = objectMapper.readValue(
+                firstResult.getResponse().getContentAsString(),
+                RaceEntryResponse.class);
+        assertNull(firstResponse.getGateNumber());
+
+        CreateRaceEntryRequest secondRequest = CreateRaceEntryRequest.builder()
+                .invitationId(acceptedInv2.getInvitationId())
+                .build();
+
+        MvcResult secondResult = mockMvc.perform(post("/api/entries")
+                .header("Authorization", staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(secondRequest)))
+                .andExpect(status().isOk())
+                .andReturn();
+        RaceEntryResponse secondResponse = objectMapper.readValue(
+                secondResult.getResponse().getContentAsString(),
+                RaceEntryResponse.class);
+        assertNotNull(secondResponse.getEntryId());
     }
 
     @Test
@@ -442,6 +489,9 @@ public class RaceEntryIntegrationTests {
                 .content(objectMapper.writeValueAsString(request1)))
                 .andExpect(status().isOk());
 
+        acceptedInv1.setInvitationStatus(RaceInvitationStatus.ACCEPTED);
+        raceInvitationRepository.save(acceptedInv1);
+
         // Try to create again for same registration
         CreateRaceEntryRequest request2 = CreateRaceEntryRequest.builder()
                 .registrationId(approvedReg1.getRegistrationId())
@@ -458,33 +508,18 @@ public class RaceEntryIntegrationTests {
     }
 
     @Test
-    void testCreateEntryDuplicateGateFails() throws Exception {
-        CreateRaceEntryRequest request1 = CreateRaceEntryRequest.builder()
-                .registrationId(approvedReg1.getRegistrationId())
-                .invitationId(acceptedInv1.getInvitationId())
-                .gateNumber((short) 3)
-                .handicapWeight(new BigDecimal("50.5"))
-                .build();
+    void testGetAcceptedInvitationCandidates() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/entries/race/" + testRace.getRaceId() + "/candidates")
+                .header("Authorization", staffToken))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        mockMvc.perform(post("/api/entries")
-                .header("Authorization", staffToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request1)))
-                .andExpect(status().isOk());
-
-        // Try to create another entry using gate 3 in same race
-        CreateRaceEntryRequest request2 = CreateRaceEntryRequest.builder()
-                .registrationId(approvedReg2.getRegistrationId())
-                .invitationId(acceptedInv2.getInvitationId())
-                .gateNumber((short) 3)
-                .handicapWeight(new BigDecimal("52.0"))
-                .build();
-
-        mockMvc.perform(post("/api/entries")
-                .header("Authorization", staffToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request2)))
-                .andExpect(status().isConflict());
+        AcceptedInvitationCandidateResponse[] responses = objectMapper.readValue(
+                result.getResponse().getContentAsString(),
+                AcceptedInvitationCandidateResponse[].class);
+        assertEquals(2, responses.length);
+        assertTrue(responses[0].getCanCreateEntry());
+        assertNull(responses[0].getReason());
     }
 
     @Test

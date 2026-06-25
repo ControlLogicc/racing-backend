@@ -1,8 +1,11 @@
 package com.solofounder.horseracing;
 
 import tools.jackson.databind.ObjectMapper;
+import com.solofounder.horseracing.config.JwtService;
 import com.solofounder.horseracing.dto.auth.AuthResponse;
 import com.solofounder.horseracing.dto.auth.RegisterRequest;
+import com.solofounder.horseracing.dto.entry.CreateRaceEntryRequest;
+import com.solofounder.horseracing.dto.entry.RaceEntryResponse;
 import com.solofounder.horseracing.dto.invitation.CreateInvitationRequest;
 import com.solofounder.horseracing.dto.invitation.InvitationResponse;
 import com.solofounder.horseracing.model.*;
@@ -88,10 +91,14 @@ public class RaceInvitationIntegrationTests {
     private PasswordEncoder passwordEncoder;
 
     @Autowired
+    private JwtService jwtService;
+
+    @Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     private String ownerToken;
     private String jockeyToken;
+    private String adminToken;
     private User ownerUser;
     private User jockeyUser;
     private Jockey jockeyProfile;
@@ -145,6 +152,17 @@ public class RaceInvitationIntegrationTests {
         AuthResponse ownerAuth = objectMapper.readValue(ownerRes.getResponse().getContentAsString(), AuthResponse.class);
         ownerToken = "Bearer " + ownerAuth.getToken();
         ownerUser = userRepository.findByEmail("owner@test-invitation.com").orElseThrow();
+
+        User adminUser = userRepository.save(User.builder()
+                .fullName("Test Admin")
+                .email("admin@test-invitation.com")
+                .passwordHash(passwordEncoder.encode("123456"))
+                .phone("0900000003")
+                .role(Role.ADMIN)
+                .status(UserStatus.ACTIVE)
+                .createdAt(LocalDateTime.now())
+                .build());
+        adminToken = "Bearer " + jwtService.generateToken(adminUser);
 
         // Create Jockey
         RegisterRequest registerJockey = RegisterRequest.builder()
@@ -412,6 +430,7 @@ public class RaceInvitationIntegrationTests {
         // Verify in database
         RaceInvitation dbInvitation = raceInvitationRepository.findById(invitation.getInvitationId()).orElseThrow();
         assertEquals(RaceInvitationStatus.ACCEPTED, dbInvitation.getInvitationStatus());
+        assertFalse(raceEntryRepository.existsByRegistrationRegistrationId(approvedRegistration.getRegistrationId()));
     }
 
     @Test
@@ -490,7 +509,7 @@ public class RaceInvitationIntegrationTests {
     }
 
     @Test
-    void testOnlyOneAcceptedInvitationPerRegistration() throws Exception {
+    void testRaceEntryConflictOnlyHappensWhenCreatingEntry() throws Exception {
         // Create invitation 1 (accepted)
         RaceInvitation invitation1 = raceInvitationRepository.save(RaceInvitation.builder()
                 .raceRegistration(approvedRegistration)
@@ -498,6 +517,15 @@ public class RaceInvitationIntegrationTests {
                 .invitationStatus(RaceInvitationStatus.ACCEPTED)
                 .sentAt(LocalDateTime.now())
                 .build());
+
+        CreateRaceEntryRequest createFirstEntryRequest = CreateRaceEntryRequest.builder()
+                .invitationId(invitation1.getInvitationId())
+                .build();
+        mockMvc.perform(post("/api/entries")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createFirstEntryRequest)))
+                .andExpect(status().isOk());
 
         // Register jockey 2
         RegisterRequest registerJockey2 = RegisterRequest.builder()
@@ -523,6 +551,12 @@ public class RaceInvitationIntegrationTests {
                 .status("available")
                 .createdAt(LocalDateTime.now())
                 .build());
+        jockeyRaceRegistrationRepository.save(JockeyRaceRegistration.builder()
+                .race(testRace)
+                .jockey(jockeyProfile2)
+                .status(JockeyRaceRegistrationStatus.REGISTERED)
+                .note("Available for invitation conflict test")
+                .build());
 
         // Create invitation 2 (sent)
         RaceInvitation invitation2 = raceInvitationRepository.save(RaceInvitation.builder()
@@ -532,9 +566,19 @@ public class RaceInvitationIntegrationTests {
                 .sentAt(LocalDateTime.now())
                 .build());
 
-        // Try to accept invitation 2 -> should return 409 Conflict
         mockMvc.perform(put("/api/invitations/" + invitation2.getInvitationId() + "/accept")
                 .header("Authorization", "Bearer " + jockeyAuth2.getToken()))
+                .andExpect(status().isOk());
+        assertEquals(RaceInvitationStatus.ACCEPTED,
+                raceInvitationRepository.findById(invitation2.getInvitationId()).orElseThrow().getInvitationStatus());
+
+        CreateRaceEntryRequest duplicateEntryRequest = CreateRaceEntryRequest.builder()
+                .invitationId(invitation2.getInvitationId())
+                .build();
+        mockMvc.perform(post("/api/entries")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(duplicateEntryRequest)))
                 .andExpect(status().isConflict());
     }
 
@@ -559,7 +603,7 @@ public class RaceInvitationIntegrationTests {
     }
 
     @Test
-    void testJockeyAcceptsInvitationBeforeRegistrationCloseAtCreatesRaceEntry() throws Exception {
+    void testAcceptedInvitationThenStaffCreatesRaceEntry() throws Exception {
         // Create invitation
         RaceInvitation invitation = raceInvitationRepository.save(RaceInvitation.builder()
                 .raceRegistration(approvedRegistration)
@@ -576,15 +620,31 @@ public class RaceInvitationIntegrationTests {
 
         InvitationResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), InvitationResponse.class);
         assertEquals("ACCEPTED", response.getStatus());
-        assertNotNull(response.getEntryId());
+        assertNull(response.getEntryId());
+        assertFalse(raceEntryRepository.existsByRegistrationRegistrationId(approvedRegistration.getRegistrationId()));
 
-        // Verify RaceEntry is created
-        Optional<RaceEntry> entryOpt = raceEntryRepository.findById(response.getEntryId());
+        CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
+                .invitationId(invitation.getInvitationId())
+                .build();
+
+        MvcResult createEntryResult = mockMvc.perform(post("/api/entries")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+        RaceEntryResponse entryResponse = objectMapper.readValue(
+                createEntryResult.getResponse().getContentAsString(),
+                RaceEntryResponse.class);
+
+        Optional<RaceEntry> entryOpt = raceEntryRepository.findById(entryResponse.getEntryId());
         assertTrue(entryOpt.isPresent());
         RaceEntry entry = entryOpt.get();
         assertEquals(testRace.getRaceId(), entry.getRace().getRaceId());
         assertEquals(ownerHorse.getHorseId(), entry.getHorse().getHorseId());
         assertEquals(jockeyProfile.getJockeyId(), entry.getJockey().getJockeyId());
+        assertEquals(RaceInvitationStatus.USED,
+                raceInvitationRepository.findById(invitation.getInvitationId()).orElseThrow().getInvitationStatus());
 
         // Accepting same invitation again (or trying to) returns conflict because it's already responded
         mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/accept")

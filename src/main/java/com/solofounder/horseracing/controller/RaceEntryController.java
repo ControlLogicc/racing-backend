@@ -35,6 +35,13 @@ public class RaceEntryController {
         return ResponseEntity.ok(raceEntryService.getEntriesForRace(raceId));
     }
 
+    @GetMapping("/race/{raceId}/candidates")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<List<AcceptedInvitationCandidateResponse>> getAcceptedInvitationCandidates(
+            @PathVariable Long raceId) {
+        return ResponseEntity.ok(raceEntryService.getAcceptedInvitationCandidates(raceId));
+    }
+
     @PutMapping("/race/{raceId}/weight-check")
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'REFEREE')")
     public ResponseEntity<List<RaceEntryResponse>> batchWeightCheck(@PathVariable Long raceId,

@@ -12,17 +12,14 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class CreateRaceEntryRequest {
 
-    @NotNull(message = "Registration ID is required")
     private Long registrationId;
 
     @NotNull(message = "Invitation ID is required")
     private Long invitationId;
 
-    @NotNull(message = "Gate number is required")
     @Min(value = 1, message = "Gate number must be at least 1")
     private Short gateNumber;
 
-    @NotNull(message = "Handicap weight is required")
     @DecimalMin(value = "30.0", message = "Handicap weight must be at least 30.0")
     private BigDecimal handicapWeight;
 }
