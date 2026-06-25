@@ -75,6 +75,9 @@ public class RaceResultService {
         if (currentUser.getRole() == Role.STAFF) {
             requireAssignedStaff(currentUser, race);
         }
+        if (currentUser.getRole() == Role.REFEREE) {
+            requireAssignedReferee(currentUser, race);
+        }
         if (raceResultRepository.existsByEntryEntryId(entry.getEntryId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Race entry already has a result");
         }

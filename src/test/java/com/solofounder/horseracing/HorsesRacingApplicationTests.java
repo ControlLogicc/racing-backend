@@ -115,6 +115,15 @@ class HorsesRacingApplicationTests {
         private com.solofounder.horseracing.repository.RaceInvitationRepository raceInvitationRepository;
 
         @Autowired
+        private com.solofounder.horseracing.repository.RaceEntryRepository raceEntryRepository;
+
+        @Autowired
+        private com.solofounder.horseracing.repository.RaceResultRepository raceResultRepository;
+
+        @Autowired
+        private com.solofounder.horseracing.repository.JockeyRaceRegistrationRepository jockeyRaceRegistrationRepository;
+
+        @Autowired
         private com.solofounder.horseracing.repository.RaceRegistrationRepository raceRegistrationRepository;
 
         @Autowired
@@ -128,8 +137,10 @@ class HorsesRacingApplicationTests {
         @BeforeEach
         void cleanDatabase() {
                 refereeReportRepository.deleteAll();
+                raceResultRepository.deleteAll();
                 raceEntryRepository.deleteAll();
                 raceInvitationRepository.deleteAll();
+                jockeyRaceRegistrationRepository.deleteAll();
                 raceRegistrationRepository.deleteAll();
                 // Clean up test horses owned by test users to prevent foreign key errors
                 userRepository.findAll().stream()
@@ -2391,6 +2402,7 @@ class HorsesRacingApplicationTests {
                 User owner = createOwnerUser("invite.owner@example.com", "Invite Owner");
                 Jockey jockey = createJockey("invite.jockey@example.com", "Invite Jockey", BigDecimal.valueOf(52.5));
                 RaceRegistration registration = createApprovedRegistration(owner, "Invite Horse");
+                registerJockeyForRace(jockey, registration.getRace());
 
                 CreateInvitationRequest request = CreateInvitationRequest.builder()
                                 .raceRegistrationId(registration.getRegistrationId())
@@ -2508,6 +2520,7 @@ class HorsesRacingApplicationTests {
                 User owner = createOwnerUser("invite.dup.owner@example.com", "Invite Dup Owner");
                 RaceRegistration registration = createApprovedRegistration(owner, "Dup Horse");
                 Jockey jockey = createJockey("invite.dup.jockey@example.com", "Invite Dup Jockey", BigDecimal.valueOf(52.5));
+                registerJockeyForRace(jockey, registration.getRace());
 
                 CreateInvitationRequest request = CreateInvitationRequest.builder()
                                 .raceRegistrationId(registration.getRegistrationId())
@@ -2564,6 +2577,7 @@ class HorsesRacingApplicationTests {
                 Jockey jockey = createJockey("invite.respond.jockey@example.com", "Invite Respond Jockey", BigDecimal.valueOf(52.5));
                 RaceInvitation acceptInvitation = createInvitation(owner, jockey, "Accept Horse", RaceInvitationStatus.SENT);
                 RaceInvitation declineInvitation = createInvitation(owner, jockey, "Decline Horse", RaceInvitationStatus.SENT);
+                registerJockeyForRace(jockey, acceptInvitation.getRaceRegistration().getRace());
 
                 MvcResult acceptResult = mockMvc.perform(put("/api/invitations/" + acceptInvitation.getInvitationId() + "/accept")
                                 .header("Authorization", getTokenFor(jockey.getUser())))
@@ -2690,6 +2704,15 @@ class HorsesRacingApplicationTests {
                                 .sentAt(now)
                                 .respondedAt(status == RaceInvitationStatus.ACCEPTED || status == RaceInvitationStatus.DECLINED ? now : null)
                                 .createdAt(now)
+                                .build());
+        }
+
+        private JockeyRaceRegistration registerJockeyForRace(Jockey jockey, Race race) {
+                return jockeyRaceRegistrationRepository.save(JockeyRaceRegistration.builder()
+                                .race(race)
+                                .jockey(jockey)
+                                .status(com.solofounder.horseracing.model.enums.JockeyRaceRegistrationStatus.REGISTERED)
+                                .note("Test race registration")
                                 .build());
         }
 

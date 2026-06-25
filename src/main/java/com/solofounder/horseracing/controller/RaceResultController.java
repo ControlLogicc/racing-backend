@@ -24,7 +24,7 @@ public class RaceResultController {
     private final RaceResultService raceResultService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'REFEREE')")
     public ResponseEntity<RaceResultResponse> createResult(@Valid @RequestBody CreateRaceResultRequest request) {
         return ResponseEntity.ok(raceResultService.createResult(request));
     }

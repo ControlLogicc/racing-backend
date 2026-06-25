@@ -4,6 +4,7 @@ import com.solofounder.horseracing.dto.invitation.CreateInvitationRequest;
 import com.solofounder.horseracing.dto.invitation.InvitationResponse;
 import com.solofounder.horseracing.model.*;
 import com.solofounder.horseracing.model.enums.RaceInvitationStatus;
+import com.solofounder.horseracing.model.enums.JockeyRaceRegistrationStatus;
 import com.solofounder.horseracing.model.enums.RaceRegistrationStatus;
 import com.solofounder.horseracing.model.enums.RaceStatus;
 import com.solofounder.horseracing.model.enums.Role;
@@ -35,6 +36,7 @@ public class RaceInvitationService {
     private final JdbcTemplate jdbcTemplate;
     private final RaceEntryRepository raceEntryRepository;
     private final StaffRepository staffRepository;
+    private final JockeyRaceRegistrationRepository jockeyRaceRegistrationRepository;
 
     public InvitationResponse createInvitation(CreateInvitationRequest request) {
         User currentUser = getCurrentUser();
@@ -102,12 +104,25 @@ public class RaceInvitationService {
         if (jockey.getUser().getStatus() != UserStatus.ACTIVE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Jockey account is not active");
         }
+        if (jockey.getStatus() == null || !"available".equalsIgnoreCase(jockey.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Jockey status is not available");
+        }
+        if (!jockeyRaceRegistrationRepository.existsByRaceRaceIdAndJockeyJockeyIdAndStatus(
+                race.getRaceId(),
+                jockey.getJockeyId(),
+                JockeyRaceRegistrationStatus.REGISTERED)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Jockey has not registered for this race");
+        }
 
         // Check if this Jockey has already been invited for this Registration in active status
         boolean alreadyInvited = raceInvitationRepository.existsByRaceRegistrationRegistrationIdAndJockeyJockeyIdAndInvitationStatusIn(
                 registration.getRegistrationId(),
                 jockey.getJockeyId(),
-                Arrays.asList(RaceInvitationStatus.SENT, RaceInvitationStatus.ACCEPTED, RaceInvitationStatus.USED)
+                Arrays.asList(
+                        RaceInvitationStatus.SENT,
+                        RaceInvitationStatus.PENDING_RESPONSE,
+                        RaceInvitationStatus.ACCEPTED,
+                        RaceInvitationStatus.USED)
         );
         if (alreadyInvited) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Jockey has already been invited for this registration");
@@ -205,7 +220,8 @@ public class RaceInvitationService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
         }
 
-        if (invitation.getInvitationStatus() != RaceInvitationStatus.SENT) {
+        if (invitation.getInvitationStatus() != RaceInvitationStatus.SENT
+                && invitation.getInvitationStatus() != RaceInvitationStatus.PENDING_RESPONSE) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Invitation is already responded");
         }
 
@@ -302,6 +318,16 @@ public class RaceInvitationService {
                             .build();
                     return raceEntryRepository.save(newEntry);
                 });
+        if (!jockeyRaceRegistrationRepository.existsByRaceRaceIdAndJockeyJockeyIdAndStatus(
+                race.getRaceId(),
+                jockey.getJockeyId(),
+                JockeyRaceRegistrationStatus.REGISTERED)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Jockey has not registered for this race");
+        }
+
+        invitation.setInvitationStatus(RaceInvitationStatus.ACCEPTED);
+        invitation.setRespondedAt(now);
+        invitation = raceInvitationRepository.saveAndFlush(invitation);
 
         return toResponse(invitation);
     }

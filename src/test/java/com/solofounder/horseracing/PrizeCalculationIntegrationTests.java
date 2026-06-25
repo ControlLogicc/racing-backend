@@ -85,6 +85,9 @@ public class PrizeCalculationIntegrationTests {
     private RaceResultRepository raceResultRepository;
 
     @Autowired
+    private JockeyRaceRegistrationRepository jockeyRaceRegistrationRepository;
+
+    @Autowired
     private PrizeStructureRepository prizeStructureRepository;
 
     @Autowired
@@ -107,6 +110,7 @@ public class PrizeCalculationIntegrationTests {
         raceResultRepository.deleteAll();
         raceEntryRepository.deleteAll();
         raceInvitationRepository.deleteAll();
+        jockeyRaceRegistrationRepository.deleteAll();
         raceRegistrationRepository.deleteAll();
         prizeStructureRepository.deleteAll();
         raceRepository.deleteAll();
@@ -369,17 +373,18 @@ public class PrizeCalculationIntegrationTests {
         assertEquals(3, response.getProcessedResults());
         assertEquals(3, response.getUpdatedHorseCount());
         assertEquals(new BigDecimal("80000000.00"), response.getTotalPrizeAmount());
-        assertEquals(new BigDecimal("80.00"), response.getTotalScoreAwarded());
+        // result1=50 (PrizeStructure) + result2=30 (PrizeStructure) + result3=1 (auto, 3rd place top-3 rule)
+        assertEquals(new BigDecimal("81.00"), response.getTotalScoreAwarded());
 
         // Verify result 1
         RaceResult dbResult1 = raceResultRepository.findById(result1.getResultId()).orElseThrow();
         assertEquals(new BigDecimal("50000000.00"), dbResult1.getPrizeAmount());
         assertEquals(new BigDecimal("50.00"), dbResult1.getScoreAwarded());
 
-        // Verify result 3 (no prize structure)
+        // Verify result 3 (no prize structure) -> auto +1 (3rd place = top-3)
         RaceResult dbResult3 = raceResultRepository.findById(result3.getResultId()).orElseThrow();
         assertEquals(BigDecimal.ZERO, dbResult3.getPrizeAmount());
-        assertEquals(BigDecimal.ZERO, dbResult3.getScoreAwarded());
+        assertEquals(new BigDecimal("1"), dbResult3.getScoreAwarded().stripTrailingZeros());
 
         // Verify Horse 1 (Winner)
         Horse dbHorse1 = horseRepository.findById(horse1.getHorseId()).orElseThrow();
@@ -392,6 +397,11 @@ public class PrizeCalculationIntegrationTests {
         assertEquals(new BigDecimal("30.00"), dbHorse2.getCurrentScore());
         assertEquals((short) 4, dbHorse2.getHorseClass()); // score 30 -> class 4
         assertEquals(0, dbHorse2.getTotalWins());
+
+        // Verify Horse 3 (3rd Place, auto-scored +1)
+        Horse dbHorse3 = horseRepository.findById(horse3.getHorseId()).orElseThrow();
+        assertEquals(0, new BigDecimal("1").compareTo(dbHorse3.getCurrentScore().stripTrailingZeros()));
+        assertEquals(0, dbHorse3.getTotalWins());
     }
 
     @Test
@@ -409,7 +419,7 @@ public class PrizeCalculationIntegrationTests {
 
         RecalculatePrizesResponse response = objectMapper.readValue(res.getResponse().getContentAsString(), RecalculatePrizesResponse.class);
         assertEquals(new BigDecimal("80000000.00"), response.getTotalPrizeAmount());
-        assertEquals(new BigDecimal("80.00"), response.getTotalScoreAwarded());
+        assertEquals(new BigDecimal("81.00"), response.getTotalScoreAwarded());
 
         // Scores and wins must not double add
         Horse dbHorse1 = horseRepository.findById(horse1.getHorseId()).orElseThrow();

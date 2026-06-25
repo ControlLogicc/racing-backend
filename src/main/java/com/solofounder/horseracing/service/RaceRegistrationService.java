@@ -1,10 +1,13 @@
 package com.solofounder.horseracing.service;
 
 import com.solofounder.horseracing.dto.registration.CreateRegistrationRequest;
+import com.solofounder.horseracing.dto.registration.ApprovedRegistrationForInvitationResponse;
 import com.solofounder.horseracing.dto.registration.RegistrationResponse;
 import com.solofounder.horseracing.model.*;
+import com.solofounder.horseracing.model.enums.RaceInvitationStatus;
 import com.solofounder.horseracing.model.enums.RaceRegistrationStatus;
 import com.solofounder.horseracing.model.enums.RaceStatus;
+import com.solofounder.horseracing.model.enums.HorseRegistrationType;
 import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -23,11 +26,20 @@ import java.util.List;
 @Transactional
 public class RaceRegistrationService {
 
+    private static final List<RaceInvitationStatus> ACTIVE_INVITATION_STATUSES = List.of(
+            RaceInvitationStatus.SENT,
+            RaceInvitationStatus.PENDING_RESPONSE,
+            RaceInvitationStatus.ACCEPTED,
+            RaceInvitationStatus.USED
+    );
+
     private final RaceRegistrationRepository raceRegistrationRepository;
     private final RaceRepository raceRepository;
     private final HorseRepository horseRepository;
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
+    private final RaceInvitationRepository raceInvitationRepository;
+    private final RaceEntryRepository raceEntryRepository;
     private final RaceService raceService;
 
     public RegistrationResponse createRegistration(CreateRegistrationRequest request) {
@@ -48,6 +60,13 @@ public class RaceRegistrationService {
         // Horse status must be active
         if (horse.getStatus() == null || !"active".equalsIgnoreCase(horse.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Horse status is not active");
+        }
+
+        // PREVIOUSLY_REGISTERED horses must have their rating verified by Staff before race registration
+        if (horse.getRegistrationType() == HorseRegistrationType.PREVIOUSLY_REGISTERED
+                && !horse.isRatingVerified()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Horse rating has not been verified by Staff. Please wait for rating verification before registering.");
         }
 
         // Race must be open for registration
@@ -105,6 +124,18 @@ public class RaceRegistrationService {
 
         return raceRegistrationRepository.findByRaceRaceId(raceId).stream()
                 .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ApprovedRegistrationForInvitationResponse> getApprovedRegistrationsForCurrentOwner() {
+        User currentUser = getCurrentUser();
+        requireRole(currentUser, Role.OWNER);
+
+        return raceRegistrationRepository
+                .findBySubmittedByUserIdAndStatusWithDetails(currentUser.getUserId(), RaceRegistrationStatus.APPROVED)
+                .stream()
+                .map(this::toApprovedRegistrationForInvitationResponse)
                 .toList();
     }
 
@@ -236,6 +267,46 @@ public class RaceRegistrationService {
                 return true;
             }
         }
+    }
+
+    private ApprovedRegistrationForInvitationResponse toApprovedRegistrationForInvitationResponse(RaceRegistration registration) {
+        Race race = registration.getRace();
+        Horse horse = registration.getHorse();
+        RaceInvitation latestInvitation = raceInvitationRepository
+                .findTopByRaceRegistrationRegistrationIdOrderByCreatedAtDesc(registration.getRegistrationId())
+                .orElse(null);
+        RaceEntry entry = raceEntryRepository
+                .findByRegistrationRegistrationId(registration.getRegistrationId())
+                .orElse(null);
+        boolean hasActiveInvitation = raceInvitationRepository.existsByRaceRegistrationRegistrationIdAndInvitationStatusIn(
+                registration.getRegistrationId(),
+                ACTIVE_INVITATION_STATUSES);
+        boolean registrationStillOpen = race.getRegistrationCloseAt() == null
+                || !LocalDateTime.now().isAfter(race.getRegistrationCloseAt());
+
+        boolean canInviteJockey = registration.getStatus() == RaceRegistrationStatus.APPROVED
+                && registrationStillOpen
+                && entry == null
+                && !hasActiveInvitation;
+
+        return ApprovedRegistrationForInvitationResponse.builder()
+                .registrationId(registration.getRegistrationId())
+                .raceId(race.getRaceId())
+                .raceName(race.getRaceName())
+                .horseId(horse.getHorseId())
+                .horseName(horse.getHorseName())
+                .registrationStatus(registration.getStatus() != null ? registration.getStatus().name() : null)
+                .submittedAt(registration.getSubmittedAt())
+                .reviewedAt(registration.getReviewedAt())
+                .registrationCloseAt(race.getRegistrationCloseAt())
+                .scheduledTime(race.getScheduledTime())
+                .invitationId(latestInvitation != null ? latestInvitation.getInvitationId() : null)
+                .invitationStatus(latestInvitation != null && latestInvitation.getInvitationStatus() != null
+                        ? latestInvitation.getInvitationStatus().name()
+                        : null)
+                .entryId(entry != null ? entry.getEntryId() : null)
+                .canInviteJockey(canInviteJockey)
+                .build();
     }
 
     private RegistrationResponse toResponse(RaceRegistration registration) {

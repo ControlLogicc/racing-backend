@@ -5,6 +5,7 @@ import com.solofounder.horseracing.model.*;
 import com.solofounder.horseracing.model.enums.*;
 import com.solofounder.horseracing.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -34,6 +35,7 @@ public class RaceEntryService {
     private final StaffRepository staffRepository;
     private final RefereeRepository refereeRepository;
     private final RaceRepository raceRepository;
+    private final JockeyRaceRegistrationRepository jockeyRaceRegistrationRepository;
 
     public RaceEntryResponse createEntry(CreateRaceEntryRequest request) {
         User currentUser = getCurrentUser();
@@ -64,28 +66,45 @@ public class RaceEntryService {
                 request.getJockeyId(),
                 RaceInvitationStatus.ACCEPTED
         ).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "No ACCEPTED invitation found for this jockey and registration"));
+        RaceInvitation invitation = raceInvitationRepository.findByIdWithEntryDetails(request.getInvitationId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found"));
 
-        Race race = registration.getRace();
-        if (race.getStatus() == RaceStatus.CANCELLED ||
-                race.getStatus() == RaceStatus.RUNNING ||
-                race.getStatus() == RaceStatus.RESULT_PENDING ||
-                race.getStatus() == RaceStatus.OFFICIAL) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race is in invalid status: " + race.getStatus());
+        if (invitation.getInvitationStatus() != RaceInvitationStatus.ACCEPTED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation is not ACCEPTED");
         }
 
-        if (raceEntryRepository.existsByRaceRaceIdAndJockeyJockeyId(race.getRaceId(), invitation.getJockey().getJockeyId())) {
+        RaceRegistration registration = invitation.getRaceRegistration();
+        if (registration == null || registration.getStatus() != RaceRegistrationStatus.APPROVED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Registration is not APPROVED");
+        }
+
+        Race race = registration.getRace();
+        requireEntryCreationPermission(currentUser, race);
+        validateRaceAllowsEntryCreation(race);
+
+        if (!jockeyRaceRegistrationRepository.existsByRaceRaceIdAndJockeyJockeyIdAndStatus(
+                race.getRaceId(),
+                invitation.getJockey().getJockeyId(),
+                JockeyRaceRegistrationStatus.REGISTERED)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Jockey has not registered for this race");
+        }
+
+        if (raceEntryRepository.existsByRegistrationRegistrationId(registration.getRegistrationId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Registration already has an entry");
+        }
+        if (raceEntryRepository.existsByInvitationInvitationId(invitation.getInvitationId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Invitation already has an entry");
+        }
+        if (raceEntryRepository.existsByRaceRaceIdAndJockeyJockeyId(race.getRaceId(),
+                invitation.getJockey().getJockeyId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Jockey is already entered in this race");
         }
 
-        if (raceEntryRepository.existsByRaceRaceIdAndHorseHorseId(race.getRaceId(), registration.getHorse().getHorseId())) {
+        if (raceEntryRepository.existsByRaceRaceIdAndHorseHorseId(race.getRaceId(),
+                registration.getHorse().getHorseId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Horse is already entered in this race");
         }
 
-        if (raceEntryRepository.existsByRaceRaceIdAndGateNumber(race.getRaceId(), request.getGateNumber())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Gate number is already occupied in this race");
-        }
-
-        // Create the entry
         RaceEntry entry = RaceEntry.builder()
                 .race(race)
                 .registration(registration)
@@ -96,13 +115,25 @@ public class RaceEntryService {
                 .gateNumber(request.getGateNumber())
                 .handicapWeight(request.getHandicapWeight())
                 .entryStatus(ENTRY_DECLARED)
+                .gateNumber(resolveInitialGateNumber(race.getRaceId()))
+                .entryStatus("declared")
                 .build();
 
-        // Mark the invitation as USED
-        invitation.setInvitationStatus(RaceInvitationStatus.USED);
-        raceInvitationRepository.save(invitation);
+        RaceEntry savedEntry;
+        try {
+            savedEntry = raceEntryRepository.saveAndFlush(entry);
+        } catch (DataIntegrityViolationException ex) {
+            rethrowConflictIfRaceEntryDuplicate(registration, invitation, race);
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Race entry violates database constraint",
+                    ex);
+        }
 
-        return toResponse(raceEntryRepository.save(entry));
+        invitation.setInvitationStatus(RaceInvitationStatus.USED);
+        raceInvitationRepository.saveAndFlush(invitation);
+
+        return toResponse(savedEntry);
     }
 
     public RaceEntryResponse refereePreCheck(Long id, RefereePreCheckRequest request) {
@@ -154,6 +185,20 @@ public class RaceEntryService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<AcceptedInvitationCandidateResponse> getAcceptedInvitationCandidates(Long raceId) {
+        User currentUser = getCurrentUser();
+        Race race = raceRepository.findById(raceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race not found"));
+        requireEntryCreationPermission(currentUser, race);
+
+        return raceInvitationRepository
+                .findByRaceIdAndInvitationStatusWithDetails(raceId, RaceInvitationStatus.ACCEPTED)
+                .stream()
+                .map(this::toCandidateResponse)
+                .toList();
+    }
+
     public List<RaceEntryResponse> batchWeightCheck(Long raceId, BatchWeightCheckRequest request) {
         User currentUser = getCurrentUser();
         Race race = raceRepository.findById(raceId)
@@ -182,7 +227,19 @@ public class RaceEntryService {
         RaceEntry entry = raceEntryRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race entry not found"));
 
-        entry.setActualWeight(request.getActualWeight());
+        BigDecimal handicapWeight = entry.getHandicapWeight();
+        BigDecimal jockeyActualWeight = request.getActualWeight();
+        BigDecimal leadWeight = BigDecimal.ZERO;
+        BigDecimal carriedWeight = jockeyActualWeight;
+
+        if (handicapWeight != null) {
+            leadWeight = handicapWeight.subtract(jockeyActualWeight).max(BigDecimal.ZERO);
+            carriedWeight = jockeyActualWeight.add(leadWeight);
+        }
+
+        entry.setJockeyActualWeight(jockeyActualWeight);
+        entry.setLeadWeight(leadWeight);
+        entry.setCarriedWeight(carriedWeight);
         entry.setWeightCheckStatus(request.getWeightCheckStatus());
 
         return toResponse(raceEntryRepository.save(entry));
@@ -202,6 +259,16 @@ public class RaceEntryService {
         String status = calculateWeightCheckStatus(entry.getActualWeight(), entry.getHandicapWeight());
         entry.setWeightCheckStatus(status);
         entry.setEntryStatus(status);
+
+        BigDecimal jockeyActualWeight = check.getActualWeight();
+        BigDecimal leadWeight = request.getHandicapWeight().subtract(jockeyActualWeight).max(BigDecimal.ZERO);
+        BigDecimal carriedWeight = jockeyActualWeight.add(leadWeight);
+
+        entry.setJockeyActualWeight(jockeyActualWeight);
+        entry.setLeadWeight(leadWeight);
+        entry.setCarriedWeight(carriedWeight);
+        entry.setWeightCheckStatus(passed ? "passed" : "failed");
+        entry.setEntryStatus(passed ? "ready" : "scratched");
         return entry;
     }
 
@@ -236,10 +303,58 @@ public class RaceEntryService {
             Referee referee = refereeRepository.findByUserUserId(user.getUserId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Referee profile not found"));
             if (race.getReferee() != null && race.getReferee().getRefereeId().equals(referee.getRefereeId())) {
+    private void requireEntryCreationPermission(User user, Race race) {
+        if (user.getRole() == Role.ADMIN) {
+            return;
+        }
+        if (user.getRole() == Role.STAFF) {
+            Staff staff = staffRepository.findByUserUserId(user.getUserId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Staff profile not found"));
+            if (race.getStaff() != null && race.getStaff().getStaffId().equals(staff.getStaffId())) {
                 return;
             }
         }
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+    }
+
+    private void validateRaceAllowsEntryCreation(Race race) {
+        if (race == null ||
+                race.getStatus() == RaceStatus.CANCELLED ||
+                race.getStatus() == RaceStatus.RUNNING ||
+                race.getStatus() == RaceStatus.RESULT_PENDING ||
+                race.getStatus() == RaceStatus.OFFICIAL) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race is in invalid status: "
+                    + (race != null ? race.getStatus() : null));
+        }
+    }
+
+    private Short resolveInitialGateNumber(Long raceId) {
+        if (!raceEntryRepository.existsByRaceRaceIdAndGateNumber(raceId, null)) {
+            return null;
+        }
+        int nextGateNumber = raceEntryRepository.findMaxGateNumberByRaceId(raceId) + 1;
+        if (nextGateNumber > Short.MAX_VALUE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No available gate number");
+        }
+        return (short) nextGateNumber;
+    }
+
+    private void rethrowConflictIfRaceEntryDuplicate(RaceRegistration registration, RaceInvitation invitation,
+            Race race) {
+        if (raceEntryRepository.existsByRegistrationRegistrationId(registration.getRegistrationId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Registration already has an entry");
+        }
+        if (raceEntryRepository.existsByInvitationInvitationId(invitation.getInvitationId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Invitation already has an entry");
+        }
+        if (raceEntryRepository.existsByRaceRaceIdAndJockeyJockeyId(race.getRaceId(),
+                invitation.getJockey().getJockeyId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Jockey is already entered in this race");
+        }
+        if (raceEntryRepository.existsByRaceRaceIdAndHorseHorseId(race.getRaceId(),
+                registration.getHorse().getHorseId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Horse is already entered in this race");
+        }
     }
 
     public RaceEntryResponse updateStatus(Long id, UpdateStatusRequest request) {
@@ -298,6 +413,64 @@ public class RaceEntryService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized"));
     }
 
+    private AcceptedInvitationCandidateResponse toCandidateResponse(RaceInvitation invitation) {
+        RaceRegistration registration = invitation.getRaceRegistration();
+        Race race = registration.getRace();
+        Horse horse = registration.getHorse();
+        Jockey jockey = invitation.getJockey();
+
+        String reason = resolveCandidateBlockReason(invitation);
+
+        return AcceptedInvitationCandidateResponse.builder()
+                .invitationId(invitation.getInvitationId())
+                .registrationId(registration.getRegistrationId())
+                .raceId(race.getRaceId())
+                .raceName(race.getRaceName())
+                .horseId(horse.getHorseId())
+                .horseName(horse.getHorseName())
+                .ownerId(horse.getOwner() != null ? horse.getOwner().getUserId() : null)
+                .ownerName(horse.getOwner() != null ? horse.getOwner().getFullName() : null)
+                .jockeyId(jockey.getJockeyId())
+                .jockeyName(jockey.getUser().getFullName())
+                .invitationStatus(
+                        invitation.getInvitationStatus() != null ? invitation.getInvitationStatus().name() : null)
+                .registrationStatus(registration.getStatus() != null ? registration.getStatus().name() : null)
+                .canCreateEntry(reason == null)
+                .reason(reason)
+                .build();
+    }
+
+    private String resolveCandidateBlockReason(RaceInvitation invitation) {
+        RaceRegistration registration = invitation.getRaceRegistration();
+        Race race = registration.getRace();
+        Horse horse = registration.getHorse();
+        Jockey jockey = invitation.getJockey();
+
+        if (invitation.getInvitationStatus() != RaceInvitationStatus.ACCEPTED) {
+            return "Invitation is not ACCEPTED";
+        }
+        if (registration.getStatus() != RaceRegistrationStatus.APPROVED) {
+            return "Registration is not APPROVED";
+        }
+        if (!jockeyRaceRegistrationRepository.existsByRaceRaceIdAndJockeyJockeyIdAndStatus(
+                race.getRaceId(), jockey.getJockeyId(), JockeyRaceRegistrationStatus.REGISTERED)) {
+            return "Jockey has not registered for this race";
+        }
+        if (raceEntryRepository.existsByRegistrationRegistrationId(registration.getRegistrationId())) {
+            return "Registration already has an entry";
+        }
+        if (raceEntryRepository.existsByInvitationInvitationId(invitation.getInvitationId())) {
+            return "Invitation already has an entry";
+        }
+        if (raceEntryRepository.existsByRaceRaceIdAndJockeyJockeyId(race.getRaceId(), jockey.getJockeyId())) {
+            return "Jockey is already entered in this race";
+        }
+        if (raceEntryRepository.existsByRaceRaceIdAndHorseHorseId(race.getRaceId(), horse.getHorseId())) {
+            return "Horse is already entered in this race";
+        }
+        return null;
+    }
+
     private RaceEntryResponse toResponse(RaceEntry entry) {
         return RaceEntryResponse.builder()
                 .entryId(entry.getEntryId())
@@ -310,14 +483,17 @@ public class RaceEntryService {
                 .jockeyId(entry.getJockey().getJockeyId())
                 .jockeyName(entry.getJockey().getUser().getFullName())
                 .gateNumber(entry.getGateNumber())
-                .drawNumber(entry.getDrawNumber())
                 .handicapWeight(entry.getHandicapWeight())
-                .actualWeight(entry.getActualWeight())
+                .jockeyActualWeight(entry.getJockeyActualWeight())
+                .leadWeight(entry.getLeadWeight())
+                .carriedWeight(entry.getCarriedWeight())
                 .weightCheckStatus(entry.getWeightCheckStatus())
                 .preCheckNote(entry.getPreCheckNote())
+                .weightCheckedBy(entry.getWeightCheckedBy() != null ? entry.getWeightCheckedBy().getRefereeId() : null)
+                .weightCheckedByName(
+                        entry.getWeightCheckedBy() != null ? entry.getWeightCheckedBy().getUser().getFullName() : null)
+                .weightCheckedAt(entry.getWeightCheckedAt())
                 .entryStatus(entry.getEntryStatus())
-                .confirmedByStaffId(entry.getConfirmedByStaff() != null ? entry.getConfirmedByStaff().getStaffId() : null)
-                .confirmedByStaffName(entry.getConfirmedByStaff() != null ? entry.getConfirmedByStaff().getUser().getFullName() : null)
                 .createdAt(entry.getCreatedAt())
                 .updatedAt(entry.getUpdatedAt())
                 .scheduledTime(entry.getRace().getScheduledTime())

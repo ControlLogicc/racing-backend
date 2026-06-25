@@ -50,6 +50,12 @@ public class PrizeCalculationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race has no results");
         }
 
+        // Determine total number of finishers (eligible positions only)
+        int totalFinishers = (int) results.stream()
+                .filter(r -> r.getPosition() != null && r.getPosition() > 0
+                        && (r.getResultStatus() == RaceResultStatus.OFFICIAL || r.getResultStatus() == RaceResultStatus.AMENDED))
+                .count();
+
         BigDecimal totalPrizeAmount = BigDecimal.ZERO;
         BigDecimal totalScoreAwarded = BigDecimal.ZERO;
         Set<Horse> affectedHorses = new HashSet<>();
@@ -59,6 +65,8 @@ public class PrizeCalculationService {
             boolean eligible = result.getPosition() != null && result.getPosition() > 0
                     && result.getResultStatus() != RaceResultStatus.DISQUALIFIED;
             
+                    && (result.getResultStatus() == RaceResultStatus.OFFICIAL || result.getResultStatus() == RaceResultStatus.AMENDED);
+
             if (eligible) {
                 if (result.getResultStatus() == RaceResultStatus.PROVISIONAL) {
                     result.setResultStatus(RaceResultStatus.OFFICIAL);
@@ -69,8 +77,11 @@ public class PrizeCalculationService {
                     result.setPrizeAmount(ps.getAmount());
                     result.setScoreAwarded(ps.getScore());
                 } else {
+                    // No manual prize structure — apply automatic position-based scoring rule:
+                    // Top 3: +5 / +3 / +1
+                    // Bottom 3: -1 / -3 / -5  (counting from last place up)
                     result.setPrizeAmount(BigDecimal.ZERO);
-                    result.setScoreAwarded(BigDecimal.ZERO);
+                    result.setScoreAwarded(resolveAutomaticScore(result.getPosition(), totalFinishers));
                 }
             } else {
                 result.setPrizeAmount(BigDecimal.ZERO);
@@ -150,5 +161,30 @@ public class PrizeCalculationService {
         }
         return userRepository.findByEmail(authentication.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized"));
+    /**
+     * Automatic position-based scoring rule (applied when no PrizeStructure is defined):
+     *   - 1st place : +5
+     *   - 2nd place : +3
+     *   - 3rd place : +1
+     *   - Last place     (N)   : -5
+     *   - 2nd last place (N-1) : -3
+     *   - 3rd last place (N-2) : -1
+     *   - All other positions  :  0
+     *
+     * @param position      the finish position (1-indexed)
+     * @param totalFinishers total number of eligible finishers in this race
+     */
+    private BigDecimal resolveAutomaticScore(int position, int totalFinishers) {
+        // Top 3
+        if (position == 1) return BigDecimal.valueOf(5);
+        if (position == 2) return BigDecimal.valueOf(3);
+        if (position == 3) return BigDecimal.valueOf(1);
+
+        // Bottom 3 (only meaningful when race has enough finishers)
+        if (totalFinishers >= 1 && position == totalFinishers)     return BigDecimal.valueOf(-5);
+        if (totalFinishers >= 2 && position == totalFinishers - 1) return BigDecimal.valueOf(-3);
+        if (totalFinishers >= 3 && position == totalFinishers - 2) return BigDecimal.valueOf(-1);
+
+        return BigDecimal.ZERO;
     }
 }

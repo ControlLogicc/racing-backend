@@ -25,11 +25,20 @@ public interface RaceEntryRepository extends JpaRepository<RaceEntry, Long> {
 
     Optional<RaceEntry> findByRegistrationRegistrationId(Long registrationId);
 
+    boolean existsByInvitationInvitationId(Long invitationId);
+
     boolean existsByRaceRaceIdAndJockeyJockeyId(Long raceId, Long jockeyId);
 
     boolean existsByRaceRaceIdAndHorseHorseId(Long raceId, Long horseId);
 
     boolean existsByRaceRaceIdAndGateNumber(Long raceId, Short gateNumber);
+
+    @Query("""
+            SELECT COALESCE(MAX(e.gateNumber), 0)
+            FROM RaceEntry e
+            WHERE e.race.raceId = :raceId
+            """)
+    int findMaxGateNumberByRaceId(@Param("raceId") Long raceId);
 
     List<RaceEntry> findByRaceRaceId(Long raceId);
 
@@ -42,8 +51,6 @@ public interface RaceEntryRepository extends JpaRepository<RaceEntry, Long> {
             "JOIN FETCH e.horse " +
             "JOIN FETCH e.jockey j " +
             "JOIN FETCH j.user " +
-            "LEFT JOIN FETCH e.confirmedByStaff cs " +
-            "LEFT JOIN FETCH cs.user " +
             "WHERE r.raceId = :raceId")
     List<RaceEntry> findByRaceRaceIdWithDetails(@Param("raceId") Long raceId);
 }
