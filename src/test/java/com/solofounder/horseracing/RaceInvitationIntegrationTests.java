@@ -76,6 +76,12 @@ public class RaceInvitationIntegrationTests {
     private RaceEntryRepository raceEntryRepository;
 
     @Autowired
+    private RaceResultRepository raceResultRepository;
+
+    @Autowired
+    private JockeyRaceRegistrationRepository jockeyRaceRegistrationRepository;
+
+    @Autowired
     private RefereeReportRepository refereeReportRepository;
 
     @Autowired
@@ -97,8 +103,10 @@ public class RaceInvitationIntegrationTests {
     void setupData() throws Exception {
         // Clear all invitation records
         refereeReportRepository.deleteAll();
+        raceResultRepository.deleteAll();
         raceEntryRepository.deleteAll();
         raceInvitationRepository.deleteAll();
+        jockeyRaceRegistrationRepository.deleteAll();
         raceRegistrationRepository.deleteAll();
         raceRepository.deleteAll();
         
@@ -236,6 +244,13 @@ public class RaceInvitationIntegrationTests {
                 .submittedAt(LocalDateTime.now())
                 .reviewedAt(LocalDateTime.now())
                 .createdAt(LocalDateTime.now())
+                .build());
+
+        jockeyRaceRegistrationRepository.save(JockeyRaceRegistration.builder()
+                .race(testRace)
+                .jockey(jockeyProfile)
+                .status(JockeyRaceRegistrationStatus.REGISTERED)
+                .note("Available for invitation tests")
                 .build());
     }
 

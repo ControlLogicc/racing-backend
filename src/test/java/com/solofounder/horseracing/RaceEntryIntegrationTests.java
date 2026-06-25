@@ -85,6 +85,12 @@ public class RaceEntryIntegrationTests {
     private RaceEntryRepository raceEntryRepository;
 
     @Autowired
+    private RaceResultRepository raceResultRepository;
+
+    @Autowired
+    private JockeyRaceRegistrationRepository jockeyRaceRegistrationRepository;
+
+    @Autowired
     private RefereeReportRepository refereeReportRepository;
 
     private String adminToken;
@@ -108,8 +114,10 @@ public class RaceEntryIntegrationTests {
     @BeforeEach
     void setupData() {
         refereeReportRepository.deleteAll();
+        raceResultRepository.deleteAll();
         raceEntryRepository.deleteAll();
         raceInvitationRepository.deleteAll();
+        jockeyRaceRegistrationRepository.deleteAll();
         raceRegistrationRepository.deleteAll();
         raceRepository.deleteAll();
 
