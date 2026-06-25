@@ -11,7 +11,6 @@ import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.model.enums.UserStatus;
 import com.solofounder.horseracing.repository.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
@@ -200,7 +199,8 @@ public class RaceInvitationService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
         }
 
-        if (invitation.getInvitationStatus() != RaceInvitationStatus.SENT) {
+        if (invitation.getInvitationStatus() != RaceInvitationStatus.SENT
+                && invitation.getInvitationStatus() != RaceInvitationStatus.PENDING_RESPONSE) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Invitation is already responded");
         }
 
@@ -225,55 +225,11 @@ public class RaceInvitationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation expired because race registration period is closed");
         }
 
-        // Check if registration already has an Entry (via native database query)
-        Integer entryCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM dbo.race_entry WHERE registration_id = ?",
-                Integer.class,
-                registration.getRegistrationId()
-        );
-        if (entryCount != null && entryCount > 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Registration already has a race entry");
-        }
-
-        // Check if another invitation for the same registration is already ACCEPTED or USED
-        boolean hasAcceptedOrUsed = raceInvitationRepository.existsByRaceRegistrationRegistrationIdAndInvitationStatus(
-                registration.getRegistrationId(), RaceInvitationStatus.ACCEPTED) ||
-                raceInvitationRepository.existsByRaceRegistrationRegistrationIdAndInvitationStatus(
-                registration.getRegistrationId(), RaceInvitationStatus.USED);
-        if (hasAcceptedOrUsed) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Another invitation for this registration is already accepted");
-        }
-
         if (!jockeyRaceRegistrationRepository.existsByRaceRaceIdAndJockeyJockeyIdAndStatus(
                 race.getRaceId(),
                 jockey.getJockeyId(),
                 JockeyRaceRegistrationStatus.REGISTERED)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Jockey has not registered for this race");
-        }
-
-        // Check if unique race + horse/jockey
-        if (raceEntryRepository.existsByRaceRaceIdAndHorseHorseId(race.getRaceId(), registration.getHorse().getHorseId())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Horse is already entered in this race");
-        }
-        if (raceEntryRepository.existsByRaceRaceIdAndJockeyJockeyId(race.getRaceId(), invitation.getJockey().getJockeyId())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Jockey is already entered in this race");
-        }
-
-        RaceEntry entry = RaceEntry.builder()
-                .race(race)
-                .registration(registration)
-                .invitation(invitation)
-                .horse(registration.getHorse())
-                .jockey(invitation.getJockey())
-                .entryStatus("declared")
-                .build();
-        try {
-            raceEntryRepository.saveAndFlush(entry);
-        } catch (DataIntegrityViolationException ex) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Race entry conflicts with existing race data",
-                    ex);
         }
 
         invitation.setInvitationStatus(RaceInvitationStatus.ACCEPTED);

@@ -5,6 +5,7 @@ import com.solofounder.horseracing.model.*;
 import com.solofounder.horseracing.model.enums.*;
 import com.solofounder.horseracing.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -26,6 +27,7 @@ public class RaceEntryService {
     private final StaffRepository staffRepository;
     private final RefereeRepository refereeRepository;
     private final RaceRepository raceRepository;
+    private final JockeyRaceRegistrationRepository jockeyRaceRegistrationRepository;
 
     public RaceEntryResponse createEntry(CreateRaceEntryRequest request) {
         User currentUser = getCurrentUser();
@@ -39,37 +41,35 @@ public class RaceEntryService {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff profile not found"));
         }
 
-        RaceRegistration registration = raceRegistrationRepository.findById(request.getRegistrationId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Registration not found"));
-
-        if (registration.getStatus() != RaceRegistrationStatus.APPROVED) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Registration is not APPROVED");
-        }
-
-        // Check if registration already has an entry first, so we return 409 Conflict instead of 400 Bad Request
-        if (raceEntryRepository.existsByRegistrationRegistrationId(registration.getRegistrationId())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Registration already has an entry");
-        }
-
-        RaceInvitation invitation = raceInvitationRepository.findById(request.getInvitationId())
+        RaceInvitation invitation = raceInvitationRepository.findByIdWithEntryDetails(request.getInvitationId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found"));
 
         if (invitation.getInvitationStatus() != RaceInvitationStatus.ACCEPTED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation is not ACCEPTED");
         }
 
-        if (!invitation.getRaceRegistration().getRegistrationId().equals(registration.getRegistrationId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation does not match the registration");
+        RaceRegistration registration = invitation.getRaceRegistration();
+        if (registration == null || registration.getStatus() != RaceRegistrationStatus.APPROVED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Registration is not APPROVED");
         }
 
         Race race = registration.getRace();
-        if (race.getStatus() == RaceStatus.CANCELLED ||
-                race.getStatus() == RaceStatus.RUNNING ||
-                race.getStatus() == RaceStatus.RESULT_PENDING ||
-                race.getStatus() == RaceStatus.OFFICIAL) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race is in invalid status: " + race.getStatus());
+        requireEntryCreationPermission(currentUser, race);
+        validateRaceAllowsEntryCreation(race);
+
+        if (!jockeyRaceRegistrationRepository.existsByRaceRaceIdAndJockeyJockeyIdAndStatus(
+                race.getRaceId(),
+                invitation.getJockey().getJockeyId(),
+                JockeyRaceRegistrationStatus.REGISTERED)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Jockey has not registered for this race");
         }
 
+        if (raceEntryRepository.existsByRegistrationRegistrationId(registration.getRegistrationId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Registration already has an entry");
+        }
+        if (raceEntryRepository.existsByInvitationInvitationId(invitation.getInvitationId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Invitation already has an entry");
+        }
         if (raceEntryRepository.existsByRaceRaceIdAndJockeyJockeyId(race.getRaceId(), invitation.getJockey().getJockeyId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Jockey is already entered in this race");
         }
@@ -78,11 +78,6 @@ public class RaceEntryService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Horse is already entered in this race");
         }
 
-        if (raceEntryRepository.existsByRaceRaceIdAndGateNumber(race.getRaceId(), request.getGateNumber())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Gate number is already occupied in this race");
-        }
-
-        // Create the entry
         RaceEntry entry = RaceEntry.builder()
                 .race(race)
                 .registration(registration)
@@ -90,16 +85,25 @@ public class RaceEntryService {
                 .horse(registration.getHorse())
                 .jockey(invitation.getJockey())
                 .confirmedByStaff(confirmedBy)
-                .gateNumber(request.getGateNumber())
-                .handicapWeight(request.getHandicapWeight())
+                .gateNumber(resolveInitialGateNumber(race.getRaceId()))
                 .entryStatus("declared")
                 .build();
 
-        // Mark the invitation as USED
-        invitation.setInvitationStatus(RaceInvitationStatus.USED);
-        raceInvitationRepository.save(invitation);
+        RaceEntry savedEntry;
+        try {
+            savedEntry = raceEntryRepository.saveAndFlush(entry);
+        } catch (DataIntegrityViolationException ex) {
+            rethrowConflictIfRaceEntryDuplicate(registration, invitation, race);
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Race entry violates database constraint",
+                    ex);
+        }
 
-        return toResponse(raceEntryRepository.save(entry));
+        invitation.setInvitationStatus(RaceInvitationStatus.USED);
+        raceInvitationRepository.saveAndFlush(invitation);
+
+        return toResponse(savedEntry);
     }
 
     @Transactional(readOnly = true)
@@ -113,6 +117,20 @@ public class RaceEntryService {
     public List<RaceEntryResponse> getEntriesForRace(Long raceId) {
         return raceEntryRepository.findByRaceRaceIdWithDetails(raceId).stream()
                 .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AcceptedInvitationCandidateResponse> getAcceptedInvitationCandidates(Long raceId) {
+        User currentUser = getCurrentUser();
+        Race race = raceRepository.findById(raceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race not found"));
+        requireEntryCreationPermission(currentUser, race);
+
+        return raceInvitationRepository
+                .findByRaceIdAndInvitationStatusWithDetails(raceId, RaceInvitationStatus.ACCEPTED)
+                .stream()
+                .map(this::toCandidateResponse)
                 .toList();
     }
 
@@ -189,6 +207,57 @@ public class RaceEntryService {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
     }
 
+    private void requireEntryCreationPermission(User user, Race race) {
+        if (user.getRole() == Role.ADMIN) {
+            return;
+        }
+        if (user.getRole() == Role.STAFF) {
+            Staff staff = staffRepository.findByUserUserId(user.getUserId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Staff profile not found"));
+            if (race.getStaff() != null && race.getStaff().getStaffId().equals(staff.getStaffId())) {
+                return;
+            }
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+    }
+
+    private void validateRaceAllowsEntryCreation(Race race) {
+        if (race == null ||
+                race.getStatus() == RaceStatus.CANCELLED ||
+                race.getStatus() == RaceStatus.RUNNING ||
+                race.getStatus() == RaceStatus.RESULT_PENDING ||
+                race.getStatus() == RaceStatus.OFFICIAL) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race is in invalid status: "
+                    + (race != null ? race.getStatus() : null));
+        }
+    }
+
+    private Short resolveInitialGateNumber(Long raceId) {
+        if (!raceEntryRepository.existsByRaceRaceIdAndGateNumber(raceId, null)) {
+            return null;
+        }
+        int nextGateNumber = raceEntryRepository.findMaxGateNumberByRaceId(raceId) + 1;
+        if (nextGateNumber > Short.MAX_VALUE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No available gate number");
+        }
+        return (short) nextGateNumber;
+    }
+
+    private void rethrowConflictIfRaceEntryDuplicate(RaceRegistration registration, RaceInvitation invitation, Race race) {
+        if (raceEntryRepository.existsByRegistrationRegistrationId(registration.getRegistrationId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Registration already has an entry");
+        }
+        if (raceEntryRepository.existsByInvitationInvitationId(invitation.getInvitationId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Invitation already has an entry");
+        }
+        if (raceEntryRepository.existsByRaceRaceIdAndJockeyJockeyId(race.getRaceId(), invitation.getJockey().getJockeyId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Jockey is already entered in this race");
+        }
+        if (raceEntryRepository.existsByRaceRaceIdAndHorseHorseId(race.getRaceId(), registration.getHorse().getHorseId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Horse is already entered in this race");
+        }
+    }
+
     public RaceEntryResponse updateStatus(Long id, UpdateStatusRequest request) {
         User currentUser = getCurrentUser();
         if (currentUser.getRole() != Role.STAFF && currentUser.getRole() != Role.ADMIN) {
@@ -210,6 +279,63 @@ public class RaceEntryService {
         }
         return userRepository.findByEmail(authentication.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized"));
+    }
+
+    private AcceptedInvitationCandidateResponse toCandidateResponse(RaceInvitation invitation) {
+        RaceRegistration registration = invitation.getRaceRegistration();
+        Race race = registration.getRace();
+        Horse horse = registration.getHorse();
+        Jockey jockey = invitation.getJockey();
+
+        String reason = resolveCandidateBlockReason(invitation);
+
+        return AcceptedInvitationCandidateResponse.builder()
+                .invitationId(invitation.getInvitationId())
+                .registrationId(registration.getRegistrationId())
+                .raceId(race.getRaceId())
+                .raceName(race.getRaceName())
+                .horseId(horse.getHorseId())
+                .horseName(horse.getHorseName())
+                .ownerId(horse.getOwner() != null ? horse.getOwner().getUserId() : null)
+                .ownerName(horse.getOwner() != null ? horse.getOwner().getFullName() : null)
+                .jockeyId(jockey.getJockeyId())
+                .jockeyName(jockey.getUser().getFullName())
+                .invitationStatus(invitation.getInvitationStatus() != null ? invitation.getInvitationStatus().name() : null)
+                .registrationStatus(registration.getStatus() != null ? registration.getStatus().name() : null)
+                .canCreateEntry(reason == null)
+                .reason(reason)
+                .build();
+    }
+
+    private String resolveCandidateBlockReason(RaceInvitation invitation) {
+        RaceRegistration registration = invitation.getRaceRegistration();
+        Race race = registration.getRace();
+        Horse horse = registration.getHorse();
+        Jockey jockey = invitation.getJockey();
+
+        if (invitation.getInvitationStatus() != RaceInvitationStatus.ACCEPTED) {
+            return "Invitation is not ACCEPTED";
+        }
+        if (registration.getStatus() != RaceRegistrationStatus.APPROVED) {
+            return "Registration is not APPROVED";
+        }
+        if (!jockeyRaceRegistrationRepository.existsByRaceRaceIdAndJockeyJockeyIdAndStatus(
+                race.getRaceId(), jockey.getJockeyId(), JockeyRaceRegistrationStatus.REGISTERED)) {
+            return "Jockey has not registered for this race";
+        }
+        if (raceEntryRepository.existsByRegistrationRegistrationId(registration.getRegistrationId())) {
+            return "Registration already has an entry";
+        }
+        if (raceEntryRepository.existsByInvitationInvitationId(invitation.getInvitationId())) {
+            return "Invitation already has an entry";
+        }
+        if (raceEntryRepository.existsByRaceRaceIdAndJockeyJockeyId(race.getRaceId(), jockey.getJockeyId())) {
+            return "Jockey is already entered in this race";
+        }
+        if (raceEntryRepository.existsByRaceRaceIdAndHorseHorseId(race.getRaceId(), horse.getHorseId())) {
+            return "Horse is already entered in this race";
+        }
+        return null;
     }
 
     private RaceEntryResponse toResponse(RaceEntry entry) {
