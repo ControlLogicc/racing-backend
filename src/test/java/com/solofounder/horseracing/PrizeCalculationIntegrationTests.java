@@ -85,6 +85,9 @@ public class PrizeCalculationIntegrationTests {
     private RaceResultRepository raceResultRepository;
 
     @Autowired
+    private JockeyRaceRegistrationRepository jockeyRaceRegistrationRepository;
+
+    @Autowired
     private PrizeStructureRepository prizeStructureRepository;
 
     @Autowired
@@ -107,6 +110,7 @@ public class PrizeCalculationIntegrationTests {
         raceResultRepository.deleteAll();
         raceEntryRepository.deleteAll();
         raceInvitationRepository.deleteAll();
+        jockeyRaceRegistrationRepository.deleteAll();
         raceRegistrationRepository.deleteAll();
         prizeStructureRepository.deleteAll();
         raceRepository.deleteAll();

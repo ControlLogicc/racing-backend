@@ -226,8 +226,10 @@ public class RaceService {
         Race race = findRace(raceId);
         if (raceRepository.countRaceRegistrations(raceId) > 0
                 || raceRepository.countRaceEntries(raceId) > 0
-                || raceRepository.countRaceResults(raceId) > 0) {
-            throw new IllegalStateException("Cannot delete race with existing registration, entry, or result");
+                || raceRepository.countRaceResults(raceId) > 0
+                || raceRepository.countJockeyRaceRegistrations(raceId) > 0) {
+            throw new IllegalStateException(
+                    "Cannot delete race with existing jockey registration, horse registration, entry, or result");
         }
         raceRepository.delete(race);
     }

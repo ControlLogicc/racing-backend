@@ -71,8 +71,10 @@ public class JockeyService {
     public void deleteJockey(Long jockeyId) {
         Jockey jockey = findJockey(jockeyId);
         if (jockeyRepository.countRaceInvitations(jockeyId) > 0
-                || jockeyRepository.countRaceEntries(jockeyId) > 0) {
-            throw new IllegalStateException("Cannot delete jockey with existing race invitation or race entry");
+                || jockeyRepository.countRaceEntries(jockeyId) > 0
+                || jockeyRepository.countRaceRegistrations(jockeyId) > 0) {
+            throw new IllegalStateException(
+                    "Cannot delete jockey with existing race registration, invitation, or race entry");
         }
         jockeyRepository.delete(jockey);
     }

@@ -33,4 +33,7 @@ public interface RaceRepository extends JpaRepository<Race, Long> {
 
     @Query(value = "SELECT COUNT(*) FROM dbo.race_result WHERE race_id = :raceId", nativeQuery = true)
     long countRaceResults(@Param("raceId") Long raceId);
+
+    @Query(value = "SELECT COUNT(*) FROM dbo.jockey_race_registration WHERE race_id = :raceId", nativeQuery = true)
+    long countJockeyRaceRegistrations(@Param("raceId") Long raceId);
 }
