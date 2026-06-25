@@ -3,10 +3,14 @@ package com.solofounder.horseracing.service;
 import com.solofounder.horseracing.dto.horse.CreateHorseRequest;
 import com.solofounder.horseracing.dto.horse.UpdateHorseRequest;
 import com.solofounder.horseracing.dto.horse.HorseResponse;
+import com.solofounder.horseracing.dto.horse.VerifyHorseRatingRequest;
 import com.solofounder.horseracing.model.Horse;
 import com.solofounder.horseracing.model.User;
+import com.solofounder.horseracing.model.Staff;
+import com.solofounder.horseracing.model.enums.HorseRegistrationType;
 import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.repository.HorseRepository;
+import com.solofounder.horseracing.repository.StaffRepository;
 import com.solofounder.horseracing.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -30,6 +35,7 @@ public class HorseService {
 
     private final HorseRepository horseRepository;
     private final UserRepository userRepository;
+    private final StaffRepository staffRepository;
 
     public List<HorseResponse> getOwnerHorses() {
         User owner = getCurrentUser();
@@ -50,6 +56,22 @@ public class HorseService {
     public HorseResponse createOwnerHorse(CreateHorseRequest request) {
         User owner = getCurrentUser();
         requireRole(owner, Role.OWNER);
+
+        // Parse registration type (default NEW)
+        HorseRegistrationType regType = parseRegistrationType(request.getRegistrationType());
+
+        // Validate claimed fields for PREVIOUSLY_REGISTERED
+        if (regType == HorseRegistrationType.PREVIOUSLY_REGISTERED) {
+            if (request.getClaimedScore() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "claimedScore is required for PREVIOUSLY_REGISTERED horses");
+            }
+            if (request.getClaimedClass() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "claimedClass is required for PREVIOUSLY_REGISTERED horses");
+            }
+        }
+
         Horse horse = Horse.builder()
                 .owner(owner)
                 .horseName(normalizeRequiredName(request.getHorseName()))
@@ -57,10 +79,15 @@ public class HorseService {
                 .age(validateAge(request.getAge()))
                 .gender(normalizeGender(request.getGender()))
                 .currentScore(BigDecimal.ZERO)
-                .horseClass((short) 5) // Default to Class 5
+                .horseClass((short) 5)
                 .totalWins(0)
                 .healthNote(trimToNull(request.getHealthNote()))
-                .status("active") // Default to ACTIVE (stored as active)
+                .status("active")
+                .registrationType(regType)
+                .claimedScore(regType == HorseRegistrationType.PREVIOUSLY_REGISTERED ? request.getClaimedScore() : null)
+                .claimedClass(regType == HorseRegistrationType.PREVIOUSLY_REGISTERED ? request.getClaimedClass() : null)
+                // NEW = auto-verified; PREVIOUSLY_REGISTERED = pending Staff review
+                .ratingVerified(regType == HorseRegistrationType.NEW)
                 .build();
         return toResponse(horseRepository.save(horse));
     }
@@ -89,6 +116,81 @@ public class HorseService {
         Horse horse = horseRepository.findByHorseIdAndOwnerUserId(horseId, owner.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Horse not found"));
         deleteHorse(horse);
+    }
+
+    // ── Staff / Admin: rating verification ───────────────────────────────────
+
+    /**
+     * Verify (approve) the claimed rating of a PREVIOUSLY_REGISTERED horse.
+     * Staff/Admin can optionally override the Owner's claimed score and class.
+     */
+    public HorseResponse verifyHorseRating(Long horseId, VerifyHorseRatingRequest request) {
+        User currentUser = getCurrentUser();
+        requireStaffOrAdmin(currentUser);
+
+        Horse horse = findHorse(horseId);
+
+        if (horse.getRegistrationType() != HorseRegistrationType.PREVIOUSLY_REGISTERED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Only PREVIOUSLY_REGISTERED horses require rating verification");
+        }
+        if (horse.isRatingVerified()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Horse rating has already been verified");
+        }
+
+        // Resolve final score and class: staff override takes priority over owner's claim
+        BigDecimal finalScore = request != null && request.getApprovedScore() != null
+                ? request.getApprovedScore()
+                : horse.getClaimedScore();
+        Short finalClass = request != null && request.getApprovedClass() != null
+                ? request.getApprovedClass()
+                : horse.getClaimedClass();
+
+        if (finalScore == null || finalClass == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "approvedScore and approvedClass are required (no claimed values found)");
+        }
+
+        horse.setCurrentScore(finalScore);
+        horse.setHorseClass(finalClass);
+        horse.setRatingVerified(true);
+        horse.setRatingVerifiedBy(resolveStaffId(currentUser));
+        horse.setRatingVerifiedAt(LocalDateTime.now());
+
+        return toResponse(horseRepository.save(horse));
+    }
+
+    /**
+     * Reject the claimed rating of a PREVIOUSLY_REGISTERED horse.
+     * The horse is NOT deleted. It keeps default class 5, score 0.
+     * Owner may update the claim and resubmit (or Staff can re-verify).
+     */
+    public HorseResponse rejectHorseRating(Long horseId) {
+        User currentUser = getCurrentUser();
+        requireStaffOrAdmin(currentUser);
+
+        Horse horse = findHorse(horseId);
+
+        if (horse.getRegistrationType() != HorseRegistrationType.PREVIOUSLY_REGISTERED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Only PREVIOUSLY_REGISTERED horses require rating verification");
+        }
+        if (horse.isRatingVerified()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Horse rating has already been verified");
+        }
+
+        // Clear the claimed values, keep defaults (score=0, class=5)
+        horse.setClaimedScore(null);
+        horse.setClaimedClass(null);
+        horse.setCurrentScore(BigDecimal.ZERO);
+        horse.setHorseClass((short) 5);
+        // ratingVerified stays false — owner must re-submit claim
+        horse.setRatingVerifiedBy(resolveStaffId(currentUser));
+        horse.setRatingVerifiedAt(LocalDateTime.now());
+
+        return toResponse(horseRepository.save(horse));
     }
 
     public List<HorseResponse> getAllHorses() {
@@ -169,6 +271,34 @@ public class HorseService {
         }
     }
 
+    private void requireStaffOrAdmin(User user) {
+        if (user.getRole() != Role.STAFF && user.getRole() != Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+    }
+
+    private HorseRegistrationType parseRegistrationType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return HorseRegistrationType.NEW;
+        }
+        try {
+            return HorseRegistrationType.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "registrationType must be NEW or PREVIOUSLY_REGISTERED");
+        }
+    }
+
+    /** Returns staffId if the user is a Staff, otherwise null (for ADMIN). */
+    private Long resolveStaffId(User user) {
+        if (user.getRole() == Role.STAFF) {
+            return staffRepository.findByUserUserId(user.getUserId())
+                    .map(staff -> staff.getStaffId())
+                    .orElse(null);
+        }
+        return null;
+    }
+
     private String normalizeRequiredName(String value) {
         String name = trimToNull(value);
         if (name == null) {
@@ -237,7 +367,13 @@ public class HorseService {
                 .horseClass(horse.getHorseClass())
                 .totalWins(horse.getTotalWins())
                 .healthNote(horse.getHealthNote())
-                .status(horse.getStatus() != null ? horse.getStatus().toUpperCase() : "ACTIVE") // Return status as uppercase
+                .status(horse.getStatus() != null ? horse.getStatus().toUpperCase() : "ACTIVE")
+                .registrationType(horse.getRegistrationType() != null
+                        ? horse.getRegistrationType().name() : HorseRegistrationType.NEW.name())
+                .claimedScore(horse.getClaimedScore())
+                .claimedClass(horse.getClaimedClass())
+                .ratingVerified(horse.isRatingVerified())
+                .ratingVerifiedAt(horse.getRatingVerifiedAt())
                 .build();
     }
 }

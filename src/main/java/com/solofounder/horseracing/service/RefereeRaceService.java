@@ -1,8 +1,12 @@
 package com.solofounder.horseracing.service;
 
+import com.solofounder.horseracing.dto.entry.JockeyWeightCheckRequest;
+import com.solofounder.horseracing.dto.entry.JockeyWeightCheckResponse;
 import com.solofounder.horseracing.dto.entry.RaceEntryResponse;
 import com.solofounder.horseracing.dto.race.RaceResponse;
 import com.solofounder.horseracing.model.Race;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import com.solofounder.horseracing.model.RaceEntry;
 import com.solofounder.horseracing.model.Referee;
 import com.solofounder.horseracing.model.Staff;
@@ -49,6 +53,48 @@ public class RefereeRaceService {
         return raceEntryRepository.findByRaceRaceIdWithDetails(raceId).stream()
                 .map(this::toEntryResponse)
                 .toList();
+    }
+
+    @Transactional
+    public JockeyWeightCheckResponse checkJockeyWeight(Long entryId, JockeyWeightCheckRequest request) {
+        Referee referee = getCurrentReferee();
+        RaceEntry entry = raceEntryRepository.findById(entryId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race entry not found"));
+
+        Race race = entry.getRace();
+        if (race.getReferee() == null || !race.getReferee().getRefereeId().equals(referee.getRefereeId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+
+        BigDecimal handicapWeight = entry.getHandicapWeight();
+        if (handicapWeight == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Handicap weight is not set for this race entry");
+        }
+
+        BigDecimal jockeyActualWeight = request.getJockeyActualWeight();
+        if (jockeyActualWeight == null || jockeyActualWeight.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid jockey actual weight");
+        }
+
+        BigDecimal leadWeight = handicapWeight.subtract(jockeyActualWeight).max(BigDecimal.ZERO);
+        BigDecimal carriedWeight = jockeyActualWeight.add(leadWeight);
+
+        entry.setJockeyActualWeight(jockeyActualWeight);
+        entry.setLeadWeight(leadWeight);
+        entry.setCarriedWeight(carriedWeight);
+        entry.setWeightCheckStatus("PASSED");
+        entry.setWeightCheckedBy(referee);
+        entry.setWeightCheckedAt(LocalDateTime.now());
+
+        raceEntryRepository.save(entry);
+
+        return JockeyWeightCheckResponse.builder()
+                .handicapWeight(handicapWeight)
+                .jockeyActualWeight(jockeyActualWeight)
+                .leadWeight(leadWeight)
+                .carriedWeight(carriedWeight)
+                .weightCheckStatus("PASSED")
+                .build();
     }
 
     private Referee getCurrentReferee() {
@@ -111,13 +157,16 @@ public class RefereeRaceService {
                 .jockeyId(entry.getJockey().getJockeyId())
                 .jockeyName(entry.getJockey().getUser().getFullName())
                 .gateNumber(entry.getGateNumber())
-                .drawNumber(entry.getDrawNumber())
                 .handicapWeight(entry.getHandicapWeight())
-                .actualWeight(entry.getActualWeight())
+                .jockeyActualWeight(entry.getJockeyActualWeight())
+                .leadWeight(entry.getLeadWeight())
+                .carriedWeight(entry.getCarriedWeight())
                 .weightCheckStatus(entry.getWeightCheckStatus())
+                .weightCheckedBy(entry.getWeightCheckedBy() != null ? entry.getWeightCheckedBy().getRefereeId() : null)
+                .weightCheckedByName(
+                        entry.getWeightCheckedBy() != null ? entry.getWeightCheckedBy().getUser().getFullName() : null)
+                .weightCheckedAt(entry.getWeightCheckedAt())
                 .entryStatus(entry.getEntryStatus())
-                .confirmedByStaffId(entry.getConfirmedByStaff() != null ? entry.getConfirmedByStaff().getStaffId() : null)
-                .confirmedByStaffName(entry.getConfirmedByStaff() != null ? entry.getConfirmedByStaff().getUser().getFullName() : null)
                 .createdAt(entry.getCreatedAt())
                 .updatedAt(entry.getUpdatedAt())
                 .build();

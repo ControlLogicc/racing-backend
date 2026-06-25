@@ -51,8 +51,6 @@ public interface RaceEntryRepository extends JpaRepository<RaceEntry, Long> {
             "JOIN FETCH e.horse " +
             "JOIN FETCH e.jockey j " +
             "JOIN FETCH j.user " +
-            "LEFT JOIN FETCH e.confirmedByStaff cs " +
-            "LEFT JOIN FETCH cs.user " +
             "WHERE r.raceId = :raceId")
     List<RaceEntry> findByRaceRaceIdWithDetails(@Param("raceId") Long raceId);
 }

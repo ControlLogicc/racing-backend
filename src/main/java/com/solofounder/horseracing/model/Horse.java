@@ -1,9 +1,11 @@
 package com.solofounder.horseracing.model;
 
+import com.solofounder.horseracing.model.enums.HorseRegistrationType;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "horse")
@@ -49,6 +51,30 @@ public class Horse {
     @Transient
     private Integer totalWins;
 
+    // ── Registration type ──────────────────────────────────────────────────
+    @Enumerated(EnumType.STRING)
+    @Column(name = "registration_type", nullable = false, length = 25)
+    private HorseRegistrationType registrationType;
+
+    /** Score declared by Owner when type = PREVIOUSLY_REGISTERED */
+    @Column(name = "claimed_score", precision = 8, scale = 2)
+    private BigDecimal claimedScore;
+
+    /** Class declared by Owner when type = PREVIOUSLY_REGISTERED (1-5) */
+    @Column(name = "claimed_class")
+    private Short claimedClass;
+
+    /** true = rating accepted (auto for NEW, requires Staff approval for PREVIOUSLY_REGISTERED) */
+    @Column(name = "rating_verified", nullable = false)
+    private boolean ratingVerified;
+
+    /** Staff who approved/rejected the claimed rating */
+    @Column(name = "rating_verified_by")
+    private Long ratingVerifiedBy;
+
+    @Column(name = "rating_verified_at")
+    private LocalDateTime ratingVerifiedAt;
+
     @PrePersist
     protected void onCreate() {
         if (this.currentScore == null) {
@@ -62,6 +88,9 @@ public class Horse {
         }
         if (this.status == null || this.status.isBlank()) {
             this.status = "active";
+        }
+        if (this.registrationType == null) {
+            this.registrationType = HorseRegistrationType.NEW;
         }
     }
 }

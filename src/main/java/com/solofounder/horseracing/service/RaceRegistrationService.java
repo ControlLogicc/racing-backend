@@ -7,6 +7,7 @@ import com.solofounder.horseracing.model.*;
 import com.solofounder.horseracing.model.enums.RaceInvitationStatus;
 import com.solofounder.horseracing.model.enums.RaceRegistrationStatus;
 import com.solofounder.horseracing.model.enums.RaceStatus;
+import com.solofounder.horseracing.model.enums.HorseRegistrationType;
 import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -59,6 +60,13 @@ public class RaceRegistrationService {
         // Horse status must be active
         if (horse.getStatus() == null || !"active".equalsIgnoreCase(horse.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Horse status is not active");
+        }
+
+        // PREVIOUSLY_REGISTERED horses must have their rating verified by Staff before race registration
+        if (horse.getRegistrationType() == HorseRegistrationType.PREVIOUSLY_REGISTERED
+                && !horse.isRatingVerified()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Horse rating has not been verified by Staff. Please wait for rating verification before registering.");
         }
 
         // Race must be open for registration

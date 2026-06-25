@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Data
 @Builder
@@ -28,4 +29,16 @@ public class HorseResponse {
 
     private String healthNote;
     private String status;
+
+    // Registration type & rating verification
+    @Schema(example = "NEW", allowableValues = {"NEW", "PREVIOUSLY_REGISTERED"})
+    private String registrationType;
+
+    private BigDecimal claimedScore;
+    private Short claimedClass;
+
+    @Schema(description = "true = rating verified (auto for NEW, requires Staff for PREVIOUSLY_REGISTERED)")
+    private boolean ratingVerified;
+
+    private LocalDateTime ratingVerifiedAt;
 }

@@ -153,7 +153,6 @@ class OwnerRegistrationIntegrationTests {
                 .invitation(invitation)
                 .horse(registration.getHorse())
                 .jockey(jockey)
-                .confirmedByStaff(staff)
                 .gateNumber((short) 1)
                 .handicapWeight(new BigDecimal("55.00"))
                 .entryStatus("declared")

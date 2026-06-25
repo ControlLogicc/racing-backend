@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -31,4 +33,22 @@ public class CreateHorseRequest {
 
     @Schema(example = "Healthy")
     private String healthNote;
+
+    /**
+     * NEW = backend auto-assigns rating (score=0, class=5), no Staff approval needed.
+     * PREVIOUSLY_REGISTERED = Owner declares previous rating; Staff must verify before race registration.
+     */
+    @Schema(example = "NEW", allowableValues = {"NEW", "PREVIOUSLY_REGISTERED"})
+    private String registrationType; // defaults to NEW if null
+
+    /** Required when registrationType = PREVIOUSLY_REGISTERED */
+    @DecimalMin(value = "0.0", message = "Claimed score must be >= 0")
+    @Schema(example = "35.0")
+    private BigDecimal claimedScore;
+
+    /** Required when registrationType = PREVIOUSLY_REGISTERED (1–5) */
+    @Min(value = 1, message = "Claimed class must be between 1 and 5")
+    @Max(value = 5, message = "Claimed class must be between 1 and 5")
+    @Schema(example = "4", minimum = "1", maximum = "5")
+    private Short claimedClass;
 }

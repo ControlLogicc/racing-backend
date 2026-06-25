@@ -19,13 +19,15 @@ public class RaceEntryResponse {
     private Long jockeyId;
     private String jockeyName;
     private Short gateNumber;
-    private Short drawNumber;
     private BigDecimal handicapWeight;
-    private BigDecimal actualWeight;
+    private BigDecimal jockeyActualWeight;
+    private BigDecimal leadWeight;
+    private BigDecimal carriedWeight;
     private String weightCheckStatus;
+    private Long weightCheckedBy;
+    private String weightCheckedByName;
+    private LocalDateTime weightCheckedAt;
     private String entryStatus;
-    private Long confirmedByStaffId;
-    private String confirmedByStaffName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -38,21 +38,27 @@ public class RaceEntry {
     @JoinColumn(name = "jockey_id", nullable = false)
     private Jockey jockey;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "confirmed_by_staff_id")
-    private Staff confirmedByStaff;
-
     @Column(name = "gate_number")
     private Short gateNumber;
-
-    @Column(name = "draw_number")
-    private Short drawNumber;
 
     @Column(name = "handicap_weight", precision = 5, scale = 2)
     private BigDecimal handicapWeight;
 
-    @Column(name = "actual_weight", precision = 5, scale = 2)
-    private BigDecimal actualWeight;
+    @Column(name = "jockey_actual_weight", precision = 5, scale = 2)
+    private BigDecimal jockeyActualWeight;
+
+    @Column(name = "lead_weight", precision = 5, scale = 2)
+    private BigDecimal leadWeight;
+
+    @Column(name = "carried_weight", precision = 5, scale = 2)
+    private BigDecimal carriedWeight;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "weight_checked_by")
+    private Referee weightCheckedBy;
+
+    @Column(name = "weight_checked_at")
+    private LocalDateTime weightCheckedAt;
 
     @Column(name = "weight_check_status", length = 25)
     private String weightCheckStatus;

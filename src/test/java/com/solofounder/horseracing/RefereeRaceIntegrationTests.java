@@ -1,6 +1,8 @@
 package com.solofounder.horseracing;
 
 import com.solofounder.horseracing.config.JwtService;
+import com.solofounder.horseracing.dto.entry.JockeyWeightCheckRequest;
+import com.solofounder.horseracing.dto.entry.JockeyWeightCheckResponse;
 import com.solofounder.horseracing.dto.entry.RaceEntryResponse;
 import com.solofounder.horseracing.dto.race.RaceResponse;
 import com.solofounder.horseracing.model.Horse;
@@ -52,7 +54,9 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.springframework.http.MediaType;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -231,6 +235,140 @@ class RefereeRaceIntegrationTests {
         mockMvc.perform(get("/api/referee/races/" + assignedRace.getRaceId() + "/entries")
                         .header("Authorization", staffToken))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void weightCheckJockeyLessWeightAddsLead() throws Exception {
+        assignedEntry.setHandicapWeight(new BigDecimal("55.00"));
+        raceEntryRepository.save(assignedEntry);
+
+        JockeyWeightCheckRequest request = JockeyWeightCheckRequest.builder()
+                .jockeyActualWeight(new BigDecimal("52.00"))
+                .build();
+
+        MvcResult result = mockMvc.perform(put("/api/referee/race-entries/" + assignedEntry.getEntryId() + "/weight-check")
+                        .header("Authorization", assignedRefereeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JockeyWeightCheckResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), JockeyWeightCheckResponse.class);
+        assertEquals(0, new BigDecimal("55.00").compareTo(response.getHandicapWeight()));
+        assertEquals(0, new BigDecimal("52.00").compareTo(response.getJockeyActualWeight()));
+        assertEquals(0, new BigDecimal("3.00").compareTo(response.getLeadWeight()));
+        assertEquals(0, new BigDecimal("55.00").compareTo(response.getCarriedWeight()));
+        assertEquals("PASSED", response.getWeightCheckStatus());
+
+        // Verify database entry was updated
+        RaceEntry updated = raceEntryRepository.findById(assignedEntry.getEntryId()).orElseThrow();
+        assertEquals(0, new BigDecimal("52.00").compareTo(updated.getJockeyActualWeight()));
+        assertEquals(0, new BigDecimal("3.00").compareTo(updated.getLeadWeight()));
+        assertEquals(0, new BigDecimal("55.00").compareTo(updated.getCarriedWeight()));
+        assertEquals("PASSED", updated.getWeightCheckStatus());
+        assertEquals(assignedReferee.getRefereeId(), updated.getWeightCheckedBy().getRefereeId());
+        assertTrue(updated.getWeightCheckedAt().isBefore(LocalDateTime.now().plusSeconds(5)));
+    }
+
+    @Test
+    void weightCheckJockeyMoreWeightKeepsActual() throws Exception {
+        assignedEntry.setHandicapWeight(new BigDecimal("55.00"));
+        raceEntryRepository.save(assignedEntry);
+
+        JockeyWeightCheckRequest request = JockeyWeightCheckRequest.builder()
+                .jockeyActualWeight(new BigDecimal("57.00"))
+                .build();
+
+        MvcResult result = mockMvc.perform(put("/api/referee/race-entries/" + assignedEntry.getEntryId() + "/weight-check")
+                        .header("Authorization", assignedRefereeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JockeyWeightCheckResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), JockeyWeightCheckResponse.class);
+        assertEquals(0, new BigDecimal("55.00").compareTo(response.getHandicapWeight()));
+        assertEquals(0, new BigDecimal("57.00").compareTo(response.getJockeyActualWeight()));
+        assertEquals(0, new BigDecimal("0.00").compareTo(response.getLeadWeight()));
+        assertEquals(0, new BigDecimal("57.00").compareTo(response.getCarriedWeight()));
+        assertEquals("PASSED", response.getWeightCheckStatus());
+
+        // Verify database entry was updated
+        RaceEntry updated = raceEntryRepository.findById(assignedEntry.getEntryId()).orElseThrow();
+        assertEquals(0, new BigDecimal("57.00").compareTo(updated.getJockeyActualWeight()));
+        assertEquals(0, new BigDecimal("0.00").compareTo(updated.getLeadWeight()));
+        assertEquals(0, new BigDecimal("57.00").compareTo(updated.getCarriedWeight()));
+        assertEquals("PASSED", updated.getWeightCheckStatus());
+    }
+
+    @Test
+    void weightCheckForbiddenForUnassignedReferee() throws Exception {
+        assignedEntry.setHandicapWeight(new BigDecimal("55.00"));
+        raceEntryRepository.save(assignedEntry);
+
+        JockeyWeightCheckRequest request = JockeyWeightCheckRequest.builder()
+                .jockeyActualWeight(new BigDecimal("52.00"))
+                .build();
+
+        mockMvc.perform(put("/api/referee/race-entries/" + assignedEntry.getEntryId() + "/weight-check")
+                        .header("Authorization", otherRefereeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void weightCheckWrongRoleReturns403() throws Exception {
+        JockeyWeightCheckRequest request = JockeyWeightCheckRequest.builder()
+                .jockeyActualWeight(new BigDecimal("52.00"))
+                .build();
+
+        mockMvc.perform(put("/api/referee/race-entries/" + assignedEntry.getEntryId() + "/weight-check")
+                        .header("Authorization", staffToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void weightCheckNoTokenReturns401() throws Exception {
+        JockeyWeightCheckRequest request = JockeyWeightCheckRequest.builder()
+                .jockeyActualWeight(new BigDecimal("52.00"))
+                .build();
+
+        mockMvc.perform(put("/api/referee/race-entries/" + assignedEntry.getEntryId() + "/weight-check")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void weightCheckInvalidWeightsReturns400() throws Exception {
+        assignedEntry.setHandicapWeight(new BigDecimal("55.00"));
+        raceEntryRepository.save(assignedEntry);
+
+        JockeyWeightCheckRequest request = JockeyWeightCheckRequest.builder()
+                .jockeyActualWeight(new BigDecimal("-1.00"))
+                .build();
+
+        mockMvc.perform(put("/api/referee/race-entries/" + assignedEntry.getEntryId() + "/weight-check")
+                        .header("Authorization", assignedRefereeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void weightCheckEntryNotFoundReturns404() throws Exception {
+        JockeyWeightCheckRequest request = JockeyWeightCheckRequest.builder()
+                .jockeyActualWeight(new BigDecimal("52.00"))
+                .build();
+
+        mockMvc.perform(put("/api/referee/race-entries/9999999/weight-check")
+                        .header("Authorization", assignedRefereeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound());
     }
 
     private RaceEntry createEntry(Race race, User owner, String suffix) {
