@@ -83,7 +83,12 @@ public class JockeyService {
         User user = getCurrentUser();
         requireRole(user, Role.JOCKEY);
         Jockey jockey = jockeyRepository.findByUserUserId(user.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey profile not found"));
+                .orElseGet(() -> jockeyRepository.save(
+                        Jockey.builder()
+                                .user(user)
+                                .status("available")
+                                .build()
+                ));
         return toResponse(jockey);
     }
 
@@ -91,7 +96,12 @@ public class JockeyService {
         User user = getCurrentUser();
         requireRole(user, Role.JOCKEY);
         Jockey jockey = jockeyRepository.findByUserUserId(user.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey profile not found"));
+                .orElseGet(() -> jockeyRepository.save(
+                        Jockey.builder()
+                                .user(user)
+                                .status("available")
+                                .build()
+                ));
         updateJockeyFields(jockey, request);
         return toResponse(jockeyRepository.save(jockey));
     }
@@ -101,7 +111,12 @@ public class JockeyService {
         User user = getCurrentUser();
         requireRole(user, Role.JOCKEY);
         Jockey currentJockey = jockeyRepository.findByUserUserId(user.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey profile not found"));
+                .orElseGet(() -> jockeyRepository.save(
+                        Jockey.builder()
+                                .user(user)
+                                .status("available")
+                                .build()
+                ));
 
         if (!targetJockey.getJockeyId().equals(currentJockey.getJockeyId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");

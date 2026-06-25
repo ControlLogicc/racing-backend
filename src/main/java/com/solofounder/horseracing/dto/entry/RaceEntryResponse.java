@@ -24,10 +24,12 @@ public class RaceEntryResponse {
     private BigDecimal leadWeight;
     private BigDecimal carriedWeight;
     private String weightCheckStatus;
+    private String preCheckNote;
     private Long weightCheckedBy;
     private String weightCheckedByName;
     private LocalDateTime weightCheckedAt;
     private String entryStatus;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private LocalDateTime scheduledTime;
 }

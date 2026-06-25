@@ -43,7 +43,7 @@ public class RaceCondition {
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
         if (this.minEntries == null) {
-            this.minEntries = 3;
+            this.minEntries = 8;
         }
         if (this.maxEntries == null) {
             this.maxEntries = 14;

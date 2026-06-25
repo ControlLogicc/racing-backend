@@ -7,10 +7,10 @@ import com.solofounder.horseracing.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/users")
@@ -31,5 +31,21 @@ public class AdminUserController {
                 .status(createdUser.getStatus())
                 .build();
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<UserResponse>> getAllUsers() {
+        List<UserResponse> responses = authService.getAllUsers().stream()
+                .map(user -> UserResponse.builder()
+                        .userId(user.getUserId())
+                        .fullName(user.getFullName())
+                        .email(user.getEmail())
+                        .phone(user.getPhone())
+                        .role(user.getRole())
+                        .status(user.getStatus())
+                        .build())
+                .toList();
+        return ResponseEntity.ok(responses);
     }
 }

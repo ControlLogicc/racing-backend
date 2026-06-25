@@ -14,12 +14,19 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class RaceEntryService {
+
+    private static final String ENTRY_DECLARED = "DECLARED";
+    private static final String ENTRY_PASSED = "PASSED";
+    private static final String ENTRY_FAILED = "FAILED";
+    private static final String ENTRY_WITHDRAWN = "WITHDRAWN";
+    private static final BigDecimal WEIGHT_TOLERANCE_KG = new BigDecimal("0.50");
 
     private final RaceEntryRepository raceEntryRepository;
     private final RaceRegistrationRepository raceRegistrationRepository;
@@ -36,6 +43,29 @@ public class RaceEntryService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
         }
 
+        Staff confirmedBy = null;
+        if (currentUser.getRole() == Role.STAFF) {
+            confirmedBy = staffRepository.findByUserUserId(currentUser.getUserId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff profile not found"));
+        }
+
+        RaceRegistration registration = raceRegistrationRepository.findById(request.getRegistrationId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Registration not found"));
+
+        if (registration.getStatus() != RaceRegistrationStatus.APPROVED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Registration is not APPROVED");
+        }
+
+        // Check if registration already has an entry first, so we return 409 Conflict instead of 400 Bad Request
+        if (raceEntryRepository.existsByRegistrationRegistrationId(registration.getRegistrationId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Registration already has an entry");
+        }
+
+        RaceInvitation invitation = raceInvitationRepository.findByRaceRegistrationRegistrationIdAndJockeyJockeyIdAndInvitationStatus(
+                registration.getRegistrationId(),
+                request.getJockeyId(),
+                RaceInvitationStatus.ACCEPTED
+        ).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "No ACCEPTED invitation found for this jockey and registration"));
         RaceInvitation invitation = raceInvitationRepository.findByIdWithEntryDetails(request.getInvitationId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found"));
 
@@ -81,6 +111,10 @@ public class RaceEntryService {
                 .invitation(invitation)
                 .horse(registration.getHorse())
                 .jockey(invitation.getJockey())
+                .confirmedByStaff(confirmedBy)
+                .gateNumber(request.getGateNumber())
+                .handicapWeight(request.getHandicapWeight())
+                .entryStatus(ENTRY_DECLARED)
                 .gateNumber(resolveInitialGateNumber(race.getRaceId()))
                 .entryStatus("declared")
                 .build();
@@ -100,6 +134,41 @@ public class RaceEntryService {
         raceInvitationRepository.saveAndFlush(invitation);
 
         return toResponse(savedEntry);
+    }
+
+    public RaceEntryResponse refereePreCheck(Long id, RefereePreCheckRequest request) {
+        User currentUser = getCurrentUser();
+        RaceEntry entry = raceEntryRepository.findByIdWithDetails(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race entry not found"));
+        Race race = entry.getRace();
+        requireRefereePreCheckPermission(currentUser, race);
+
+        if (!isStatus(entry.getEntryStatus(), ENTRY_DECLARED)
+                && !isStatus(entry.getEntryStatus(), ENTRY_FAILED)
+                && !isStatus(entry.getEntryStatus(), ENTRY_PASSED)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only DECLARED, PASSED, or FAILED entries can be pre-checked");
+        }
+
+        if (request.getHandicapWeight() != null) {
+            entry.setHandicapWeight(request.getHandicapWeight());
+        }
+        if (request.getActualWeight() != null) {
+            entry.setActualWeight(request.getActualWeight());
+        }
+        if (request.getNote() != null) {
+            entry.setPreCheckNote(request.getNote().trim().isEmpty() ? null : request.getNote().trim());
+        }
+
+        if (entry.getActualWeight() == null || entry.getHandicapWeight() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Actual weight and handicap weight are required for pre-check");
+        }
+
+        BigDecimal diff = entry.getActualWeight().subtract(entry.getHandicapWeight()).abs().setScale(2, RoundingMode.HALF_UP);
+        String status = diff.compareTo(WEIGHT_TOLERANCE_KG) <= 0 ? ENTRY_PASSED : ENTRY_FAILED;
+        entry.setWeightCheckStatus(status);
+        entry.setEntryStatus(status);
+
+        return toResponse(raceEntryRepository.save(entry));
     }
 
     @Transactional(readOnly = true)
@@ -184,8 +253,12 @@ public class RaceEntryService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race entry does not belong to this race");
         }
 
-        boolean passed = Boolean.TRUE.equals(check.getPassed());
         entry.setHandicapWeight(request.getHandicapWeight());
+        entry.setActualWeight(check.getActualWeight());
+        entry.setPreCheckNote(check.getNote() != null && !check.getNote().trim().isEmpty() ? check.getNote().trim() : null);
+        String status = calculateWeightCheckStatus(entry.getActualWeight(), entry.getHandicapWeight());
+        entry.setWeightCheckStatus(status);
+        entry.setEntryStatus(status);
 
         BigDecimal jockeyActualWeight = check.getActualWeight();
         BigDecimal leadWeight = request.getHandicapWeight().subtract(jockeyActualWeight).max(BigDecimal.ZERO);
@@ -222,6 +295,14 @@ public class RaceEntryService {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
     }
 
+    private void requireRefereePreCheckPermission(User user, Race race) {
+        if (user.getRole() == Role.ADMIN) {
+            return;
+        }
+        if (user.getRole() == Role.REFEREE) {
+            Referee referee = refereeRepository.findByUserUserId(user.getUserId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Referee profile not found"));
+            if (race.getReferee() != null && race.getReferee().getRefereeId().equals(referee.getRefereeId())) {
     private void requireEntryCreationPermission(User user, Race race) {
         if (user.getRole() == Role.ADMIN) {
             return;
@@ -278,16 +359,49 @@ public class RaceEntryService {
 
     public RaceEntryResponse updateStatus(Long id, UpdateStatusRequest request) {
         User currentUser = getCurrentUser();
-        if (currentUser.getRole() != Role.STAFF && currentUser.getRole() != Role.ADMIN) {
+        if (currentUser.getRole() != Role.ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
         }
 
         RaceEntry entry = raceEntryRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race entry not found"));
 
-        entry.setEntryStatus(request.getStatus());
+        String requestedStatus = request.getStatus().trim().toUpperCase();
+        if (ENTRY_WITHDRAWN.equals(requestedStatus) && !isStatus(entry.getEntryStatus(), ENTRY_FAILED)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only FAILED entries can be withdrawn");
+        }
+        entry.setEntryStatus(requestedStatus);
 
         return toResponse(raceEntryRepository.save(entry));
+    }
+
+    public List<RaceEntryResponse> randomizeGates(Long raceId) {
+        User currentUser = getCurrentUser();
+        if (currentUser.getRole() != Role.STAFF && currentUser.getRole() != Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+
+        List<RaceEntry> entries = raceEntryRepository.findByRaceRaceId(raceId).stream()
+                .filter(e -> !isStatus(e.getEntryStatus(), ENTRY_WITHDRAWN))
+                .toList();
+
+        if (entries.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No active entries found for this race");
+        }
+
+        List<Integer> gates = new java.util.ArrayList<>();
+        for (int i = 1; i <= entries.size(); i++) {
+            gates.add(i);
+        }
+        java.util.Collections.shuffle(gates);
+
+        for (int i = 0; i < entries.size(); i++) {
+            entries.get(i).setGateNumber((short) (int) gates.get(i));
+        }
+
+        return raceEntryRepository.saveAll(entries).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     private User getCurrentUser() {
@@ -374,6 +488,7 @@ public class RaceEntryService {
                 .leadWeight(entry.getLeadWeight())
                 .carriedWeight(entry.getCarriedWeight())
                 .weightCheckStatus(entry.getWeightCheckStatus())
+                .preCheckNote(entry.getPreCheckNote())
                 .weightCheckedBy(entry.getWeightCheckedBy() != null ? entry.getWeightCheckedBy().getRefereeId() : null)
                 .weightCheckedByName(
                         entry.getWeightCheckedBy() != null ? entry.getWeightCheckedBy().getUser().getFullName() : null)
@@ -381,6 +496,19 @@ public class RaceEntryService {
                 .entryStatus(entry.getEntryStatus())
                 .createdAt(entry.getCreatedAt())
                 .updatedAt(entry.getUpdatedAt())
+                .scheduledTime(entry.getRace().getScheduledTime())
                 .build();
+    }
+
+    private String calculateWeightCheckStatus(BigDecimal actualWeight, BigDecimal handicapWeight) {
+        if (actualWeight == null || handicapWeight == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Actual weight and handicap weight are required for pre-check");
+        }
+        BigDecimal diff = actualWeight.subtract(handicapWeight).abs().setScale(2, RoundingMode.HALF_UP);
+        return diff.compareTo(WEIGHT_TOLERANCE_KG) <= 0 ? ENTRY_PASSED : ENTRY_FAILED;
+    }
+
+    private boolean isStatus(String actual, String expected) {
+        return actual != null && actual.equalsIgnoreCase(expected);
     }
 }

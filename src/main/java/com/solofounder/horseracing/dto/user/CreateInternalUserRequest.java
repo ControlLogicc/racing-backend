@@ -27,4 +27,11 @@ public class CreateInternalUserRequest {
 
     @NotNull(message = "Role is required")
     private Role role;
+
+    // Optional profile fields based on role
+    private String staffCode;
+    private String department;
+    private String licenseNo;
+    private java.math.BigDecimal weight;
+    private Short experienceYears;
 }

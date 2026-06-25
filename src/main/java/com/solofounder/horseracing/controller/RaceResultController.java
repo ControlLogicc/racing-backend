@@ -30,13 +30,13 @@ public class RaceResultController {
     }
 
     @GetMapping("/horse/{horseId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("permitAll()")
     public ResponseEntity<List<RaceResultResponse>> getResultsByHorse(@PathVariable Long horseId) {
         return ResponseEntity.ok(raceResultService.getResultsByHorse(horseId));
     }
 
     @GetMapping("/{raceId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("permitAll()")
     public ResponseEntity<List<RaceResultResponse>> getResultsByRace(@PathVariable Long raceId) {
         return ResponseEntity.ok(raceResultService.getResultsByRace(raceId));
     }

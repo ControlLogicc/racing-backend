@@ -25,4 +25,5 @@ public class InvitationResponse {
     private Boolean canAccept;
     private Boolean canDecline;
     private Long entryId;
+    private LocalDateTime scheduledTime;
 }

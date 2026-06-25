@@ -39,11 +39,28 @@ public class StaffService {
     private final RaceRepository raceRepository;
     private final RaceRegistrationRepository raceRegistrationRepository;
 
+    public List<StaffResponse> getAllStaff() {
+        return staffRepository.findAll().stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     public StaffResponse getCurrentStaffProfile() {
         User user = getCurrentUser();
         requireRole(user, Role.STAFF);
         Staff staff = findCurrentStaffProfile(user);
         return toResponse(staff);
+    }
+
+    public Object getCurrentProfileOrAllStaff() {
+        User user = getCurrentUser();
+        if (user.getRole() == Role.ADMIN) {
+            return getAllStaff();
+        }
+        if (user.getRole() == Role.STAFF) {
+            return toResponse(findCurrentStaffProfile(user));
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
     }
 
     public List<RaceResponse> getCurrentStaffRaces() {

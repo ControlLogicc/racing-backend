@@ -300,9 +300,9 @@ class RaceResultIntegrationTests {
     }
 
     @Test
-    void scratchedEntryCannotHaveResult() throws Exception {
+    void failedEntryCannotHaveResult() throws Exception {
         RaceEntry entry = entries.get(0);
-        entry.setEntryStatus("scratched");
+        entry.setEntryStatus("FAILED");
         raceEntryRepository.save(entry);
 
         postResult(adminToken, entry.getEntryId(), (short) 1, null)
@@ -449,7 +449,7 @@ class RaceResultIntegrationTests {
                 .horse(horse)
                 .jockey(jockey)
                 .gateNumber(gateNumber)
-                .entryStatus("declared")
+                .entryStatus("PASSED")
                 .build());
     }
 

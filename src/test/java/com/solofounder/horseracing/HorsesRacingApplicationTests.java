@@ -129,6 +129,9 @@ class HorsesRacingApplicationTests {
         @Autowired
         private com.solofounder.horseracing.repository.RefereeReportRepository refereeReportRepository;
 
+        @Autowired
+        private com.solofounder.horseracing.repository.RaceEntryRepository raceEntryRepository;
+
         private static final java.util.Set<Long> preExistingUserIds = new java.util.HashSet<>();
 
         @BeforeEach
@@ -435,6 +438,24 @@ class HorsesRacingApplicationTests {
                 assertEquals("0922222222", response.getPhone());
                 assertEquals(Role.REFEREE, response.getRole());
                 assertEquals(UserStatus.ACTIVE, response.getStatus());
+        }
+
+        @Test
+        void testAdminGetAllUsersSuccess() throws Exception {
+                String adminToken = getAdminToken();
+
+                mockMvc.perform(get("/api/admin/users")
+                                .header("Authorization", adminToken))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void testAdminGetAllUsersStaffForbidden() throws Exception {
+                String ownerToken = getHorseOwnerToken();
+
+                mockMvc.perform(get("/api/admin/users")
+                                .header("Authorization", ownerToken))
+                                .andExpect(status().isForbidden());
         }
 
         // 11. Admin creates REFEREE account -> Expected: account created successfully,
@@ -1246,7 +1267,7 @@ class HorsesRacingApplicationTests {
                 Staff staff = createStaff("jockey.avail.staff@example.com", "Jockey Available Staff", "JASF01");
                 Referee referee = createReferee("jockey.avail.ref@example.com", "Jockey Available Referee", "JARF01");
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
 
                 MvcResult result = mockMvc.perform(get("/api/jockeys/available-races")
                                 .header("Authorization", getTokenFor(jockey.getUser())))
@@ -1468,11 +1489,11 @@ class HorsesRacingApplicationTests {
                 Race race = setupRaceHierarchy(staff, referee, "DRAFT", now.minusMinutes(10), now.plusMinutes(50),
                                 now.plusHours(2));
 
-                // DRAFT -> OPEN_FOR_ENTRY directly should fail with 400 Bad Request
+                // DRAFT -> RUNNING directly should fail with 400 Bad Request
                 mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
                                 .header("Authorization", adminToken)
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"status\":\"OPEN_FOR_ENTRY\"}"))
+                                .content("{\"status\":\"RUNNING\"}"))
                                 .andExpect(status().isBadRequest());
         }
 
@@ -1501,10 +1522,10 @@ class HorsesRacingApplicationTests {
                 Referee referee = createReferee("laterlife.ref@example.com", "LaterLife Referee", "LLRF01");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staff, referee, "CLOSED_FOR_ENTRY", now.minusHours(2), now.minusHours(1),
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusHours(2), now.minusHours(1),
                                 now.plusHours(1));
 
-                // 1. CLOSED_FOR_ENTRY -> RUNNING
+                // 1. SCHEDULED -> RUNNING
                 mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
                                 .header("Authorization", adminToken)
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -1549,16 +1570,16 @@ class HorsesRacingApplicationTests {
                                 .content("{\"status\":\"CANCELLED\"}"))
                                 .andExpect(status().isOk());
 
-                // Test OPEN_FOR_ENTRY -> CANCELLED
-                Race race3 = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
+                // Test SCHEDULED -> CANCELLED
+                Race race3 = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
                 mockMvc.perform(patch("/api/race-management/races/" + race3.getRaceId() + "/status")
                                 .header("Authorization", adminToken)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{\"status\":\"CANCELLED\"}"))
                                 .andExpect(status().isOk());
 
-                // Test CLOSED_FOR_ENTRY -> CANCELLED
-                Race race4 = setupRaceHierarchy(staff, referee, "CLOSED_FOR_ENTRY", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
+                // Test SCHEDULED -> CANCELLED
+                Race race4 = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
                 mockMvc.perform(patch("/api/race-management/races/" + race4.getRaceId() + "/status")
                                 .header("Authorization", adminToken)
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -1574,18 +1595,17 @@ class HorsesRacingApplicationTests {
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
                 // Registration is in the past
-                java.time.LocalDateTime openAt = now.minusHours(3);
-                java.time.LocalDateTime closeAt = now.minusHours(2);
+                java.time.LocalDateTime openAt = now.minusHours(1);
+                java.time.LocalDateTime closeAt = now.plusHours(1);
                 java.time.LocalDateTime scheduledAt = now.plusHours(2);
 
                 Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", openAt, closeAt, scheduledAt);
 
-                // SCHEDULED -> OPEN_FOR_ENTRY should fail since current time is after
-                // registrationCloseAt
+                // SCHEDULED -> RUNNING should fail before registrationCloseAt
                 mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
                                 .header("Authorization", adminToken)
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"status\":\"OPEN_FOR_ENTRY\"}"))
+                                .content("{\"status\":\"RUNNING\"}"))
                                 .andExpect(status().isBadRequest());
         }
 
@@ -1597,12 +1617,12 @@ class HorsesRacingApplicationTests {
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
 
-                // Race 1: OPEN_FOR_ENTRY, currently open
-                Race race1 = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusMinutes(10),
+                // Race 1: SCHEDULED, currently open
+                Race race1 = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusMinutes(10),
                                 now.plusMinutes(50), now.plusHours(2));
 
-                // Race 2: SCHEDULED
-                Race race2 = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusMinutes(10), now.plusMinutes(50),
+                // Race 2: SCHEDULED, registration not open yet
+                Race race2 = setupRaceHierarchy(staff, referee, "SCHEDULED", now.plusMinutes(10), now.plusMinutes(50),
                                 now.plusHours(2));
 
                 MvcResult result = mockMvc.perform(get("/api/races/open")
@@ -1628,7 +1648,7 @@ class HorsesRacingApplicationTests {
 
                 Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", openAt, closeAt, scheduledAt);
 
-                // Transition: SCHEDULED -> registration_open (database format equivalent to OPEN_FOR_ENTRY)
+                // Database status aliases are accepted by the status update API.
                 MvcResult mvcResult = mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
                                 .header("Authorization", adminToken)
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -1639,7 +1659,6 @@ class HorsesRacingApplicationTests {
                 }
                 assertEquals(200, mvcResult.getResponse().getStatus());
 
-                // Transition: OPEN_FOR_ENTRY -> registration_closed (database format equivalent to CLOSED_FOR_ENTRY)
                 mockMvc.perform(patch("/api/race-management/races/" + race.getRaceId() + "/status")
                                 .header("Authorization", adminToken)
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -1868,7 +1887,7 @@ class HorsesRacingApplicationTests {
                 Referee referee = createReferee("reg.ref@example.com", "Reg Referee", "RGRF01");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
 
                 User owner = createOwnerUser("reg.owner@example.com", "Reg Owner");
                 String ownerToken = getTokenFor(owner);
@@ -1901,7 +1920,7 @@ class HorsesRacingApplicationTests {
                 Referee referee = createReferee("reg.dup.ref@example.com", "Reg Referee", "RGRF02");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
 
                 User owner = createOwnerUser("reg.dup.owner@example.com", "Reg Owner");
                 String ownerToken = getTokenFor(owner);
@@ -1934,7 +1953,7 @@ class HorsesRacingApplicationTests {
                 Referee referee = createReferee("reg.other.ref@example.com", "Reg Referee", "RGRF03");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
 
                 User ownerA = createOwnerUser("reg.ownerA@example.com", "Owner A");
                 User ownerB = createOwnerUser("reg.ownerB@example.com", "Owner B");
@@ -1962,7 +1981,7 @@ class HorsesRacingApplicationTests {
                 Referee referee = createReferee("reg.notopen.ref@example.com", "Reg Referee", "RGRF04");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race race = setupRaceHierarchy(staff, referee, "DRAFT", now.minusHours(1), now.plusHours(1), now.plusHours(5));
 
                 User owner = createOwnerUser("reg.notopen.owner@example.com", "Reg Owner");
                 String ownerToken = getTokenFor(owner);
@@ -1987,7 +2006,7 @@ class HorsesRacingApplicationTests {
                 Referee referee = createReferee("reg.time.ref@example.com", "Reg Referee", "RGRF05");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(5), now.minusHours(1), now.plusHours(5));
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusHours(5), now.minusHours(1), now.plusHours(5));
 
                 User owner = createOwnerUser("reg.time.owner@example.com", "Reg Owner");
                 String ownerToken = getTokenFor(owner);
@@ -2011,7 +2030,7 @@ class HorsesRacingApplicationTests {
                 Referee referee = createReferee("reg.view.ref@example.com", "Reg Referee", "RGRF06");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
 
                 User owner = createOwnerUser("reg.view.owner@example.com", "Reg Owner");
                 String ownerToken = getTokenFor(owner);
@@ -2045,7 +2064,7 @@ class HorsesRacingApplicationTests {
                 Referee referee = createReferee("reg.view.refB@example.com", "Reg Referee", "RGRF08");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staffA, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race race = setupRaceHierarchy(staffA, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
 
                 String staffBToken = getTokenFor(staffB.getUser());
                 mockMvc.perform(get("/api/registrations/" + race.getRaceId())
@@ -2060,8 +2079,8 @@ class HorsesRacingApplicationTests {
                 Referee referee = createReferee("staff.races.ref@example.com", "Staff Races Ref", "SRRF01");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race raceA = setupRaceHierarchy(staffA, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
-                Race raceB = setupRaceHierarchy(staffB, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race raceA = setupRaceHierarchy(staffA, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race raceB = setupRaceHierarchy(staffB, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
 
                 MvcResult result = mockMvc.perform(get("/api/staff/races")
                                 .header("Authorization", getTokenFor(staffA.getUser())))
@@ -2106,8 +2125,8 @@ class HorsesRacingApplicationTests {
                 User owner = createOwnerUser("staff.regs.owner@example.com", "Staff Regs Owner");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race raceA = setupRaceHierarchy(staffA, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
-                Race raceB = setupRaceHierarchy(staffB, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race raceA = setupRaceHierarchy(staffA, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race raceB = setupRaceHierarchy(staffB, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
                 Horse pendingHorse = createHorseForOwner(owner, "Staff Pending Horse", "active");
                 Horse approvedHorse = createHorseForOwner(owner, "Staff Approved Horse", "active");
                 Horse otherHorse = createHorseForOwner(owner, "Other Staff Horse", "active");
@@ -2186,7 +2205,7 @@ class HorsesRacingApplicationTests {
                 Referee referee = createReferee("reg.app.ref@example.com", "Reg Referee", "RGRF09");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
 
                 User owner = createOwnerUser("reg.app.owner@example.com", "Reg Owner");
                 String ownerToken = getTokenFor(owner);
@@ -2222,7 +2241,7 @@ class HorsesRacingApplicationTests {
                 Referee referee = createReferee("reg.rej.ref@example.com", "Reg Referee", "RGRF10");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
 
                 User owner = createOwnerUser("reg.rej.owner@example.com", "Reg Owner");
                 String ownerToken = getTokenFor(owner);
@@ -2258,7 +2277,7 @@ class HorsesRacingApplicationTests {
                 Referee referee = createReferee("reg.trans.ref@example.com", "Reg Referee", "RGRF11");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
 
                 User owner = createOwnerUser("reg.trans.owner@example.com", "Reg Owner");
                 String ownerToken = getTokenFor(owner);
@@ -2298,7 +2317,7 @@ class HorsesRacingApplicationTests {
                 Referee referee = createReferee("reg.ownerperms.ref@example.com", "Reg Referee", "RGRF12");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
 
                 User owner = createOwnerUser("reg.ownerperms.owner@example.com", "Reg Owner");
                 String ownerToken = getTokenFor(owner);
@@ -2347,7 +2366,7 @@ class HorsesRacingApplicationTests {
                 Referee referee = createReferee("reg.entrycheck.ref@example.com", "Reg Referee", "RGRF13");
 
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusHours(1), now.plusHours(1), now.plusHours(5));
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusHours(1), now.plusHours(1), now.plusHours(5));
 
                 User owner = createOwnerUser("reg.entrycheck.owner@example.com", "Reg Owner");
                 String ownerToken = getTokenFor(owner);
@@ -2659,7 +2678,7 @@ class HorsesRacingApplicationTests {
                 Staff staff = createStaff(horseName.toLowerCase().replace(" ", ".") + ".staff@example.com", horseName + " Staff", "INV" + Math.abs(horseName.hashCode() % 10000));
                 Referee referee = createReferee(horseName.toLowerCase().replace(" ", ".") + ".ref@example.com", horseName + " Referee", "INV-RF-" + Math.abs(horseName.hashCode() % 10000));
                 java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                Race race = setupRaceHierarchy(staff, referee, "OPEN_FOR_ENTRY", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED", now.minusMinutes(10), now.plusMinutes(50), now.plusHours(2));
                 Horse horse = createHorseForOwner(owner, horseName, "active");
 
                 return raceRegistrationRepository.save(RaceRegistration.builder()

@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
@@ -34,6 +35,7 @@ public class RaceInvitationService {
     private final UserRepository userRepository;
     private final JdbcTemplate jdbcTemplate;
     private final RaceEntryRepository raceEntryRepository;
+    private final StaffRepository staffRepository;
     private final JockeyRaceRegistrationRepository jockeyRaceRegistrationRepository;
 
     public InvitationResponse createInvitation(CreateInvitationRequest request) {
@@ -153,10 +155,24 @@ public class RaceInvitationService {
         List<RaceInvitation> invitations;
         if (currentUser.getRole() == Role.JOCKEY) {
             jockeyRepository.findByUserUserId(currentUser.getUserId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey profile not found"));
+                    .orElseGet(() -> jockeyRepository.save(
+                            Jockey.builder()
+                                    .user(currentUser)
+                                    .status("available")
+                                    .build()
+                    ));
             invitations = raceInvitationRepository.findByJockeyUserUserId(currentUser.getUserId());
         } else if (currentUser.getRole() == Role.OWNER) {
             invitations = raceInvitationRepository.findByRaceRegistrationHorseOwnerUserId(currentUser.getUserId());
+        } else if (currentUser.getRole() == Role.ADMIN) {
+            invitations = raceInvitationRepository.findAll();
+        } else if (currentUser.getRole() == Role.STAFF) {
+            Staff staff = staffRepository.findByUserUserId(currentUser.getUserId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Staff profile not found"));
+            invitations = raceInvitationRepository.findAll().stream()
+                    .filter(inv -> inv.getRaceRegistration().getRace().getStaff() != null &&
+                            inv.getRaceRegistration().getRace().getStaff().getStaffId().equals(staff.getStaffId()))
+                    .toList();
         } else {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
         }
@@ -189,13 +205,18 @@ public class RaceInvitationService {
         requireRole(currentUser, Role.JOCKEY);
 
         Jockey jockey = jockeyRepository.findByUserUserId(currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey profile not found"));
+                .orElseGet(() -> jockeyRepository.save(
+                        Jockey.builder()
+                                .user(currentUser)
+                                .status("available")
+                                .build()
+                ));
 
         RaceInvitation invitation = raceInvitationRepository.findById(invitationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found"));
 
-        // Ownership rule: invitation.jockey must match the authenticated Jockey
-        if (!invitation.getJockey().getJockeyId().equals(jockey.getJockeyId())) {
+        // Ownership rule: invitation's jockey must belong to the authenticated user
+        if (!invitation.getJockey().getUser().getUserId().equals(currentUser.getUserId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
         }
 
@@ -225,6 +246,78 @@ public class RaceInvitationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation expired because race registration period is closed");
         }
 
+        // Check if registration already has an Entry (via native database query)
+        Integer entryCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM dbo.race_entry WHERE registration_id = ?",
+                Integer.class,
+                registration.getRegistrationId()
+        );
+        if (entryCount != null && entryCount > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Registration already has a race entry");
+        }
+
+        // Check if another invitation for the same registration is already ACCEPTED or USED
+        // (must run BEFORE we save ACCEPTED status to avoid self-detection)
+        boolean hasAcceptedOrUsed = raceInvitationRepository.existsByRaceRegistrationRegistrationIdAndInvitationStatus(
+                registration.getRegistrationId(), RaceInvitationStatus.ACCEPTED) ||
+                raceInvitationRepository.existsByRaceRegistrationRegistrationIdAndInvitationStatus(
+                registration.getRegistrationId(), RaceInvitationStatus.USED);
+        if (hasAcceptedOrUsed) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Another invitation for this registration is already accepted");
+        }
+
+        // Check if unique race + horse/jockey BEFORE saving (to avoid partial state on rollback)
+        if (raceEntryRepository.existsByRaceRaceIdAndHorseHorseId(race.getRaceId(), registration.getHorse().getHorseId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Horse is already entered in this race");
+        }
+        if (raceEntryRepository.existsByRaceRaceIdAndJockeyJockeyId(race.getRaceId(), invitation.getJockey().getJockeyId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Jockey is already entered in this race");
+        }
+
+        // All checks passed — persist ACCEPTED status now
+        invitation.setInvitationStatus(RaceInvitationStatus.ACCEPTED);
+        invitation.setRespondedAt(now);
+        invitation = raceInvitationRepository.save(invitation);
+
+        final RaceRegistration finalRegistration = registration;
+        final RaceInvitation finalInvitation = invitation;
+
+        // Auto-create RaceEntry
+        RaceEntry entry = raceEntryRepository.findByRegistrationRegistrationId(registration.getRegistrationId())
+                .orElseGet(() -> {
+                    Horse horse = finalRegistration.getHorse();
+                    BigDecimal currentScore = horse.getCurrentScore() != null ? horse.getCurrentScore() : BigDecimal.ZERO;
+                    short horseClass = horse.getHorseClass() != null ? horse.getHorseClass() : 5;
+
+                    BigDecimal baseWeight = new BigDecimal("50.0");
+                    BigDecimal minScore = BigDecimal.ZERO;
+                    switch (horseClass) {
+                        case 1: minScore = new BigDecimal("80.0"); break;
+                        case 2: minScore = new BigDecimal("60.0"); break;
+                        case 3: minScore = new BigDecimal("40.0"); break;
+                        case 4: minScore = new BigDecimal("20.0"); break;
+                        default: minScore = BigDecimal.ZERO; break;
+                    }
+
+                    BigDecimal scoreInClass = currentScore.subtract(minScore);
+                    if (scoreInClass.compareTo(BigDecimal.ZERO) < 0) {
+                        scoreInClass = BigDecimal.ZERO;
+                    }
+
+                    BigDecimal calculatedHandicapWeight = baseWeight.add(scoreInClass.multiply(new BigDecimal("0.5")));
+
+                    RaceEntry newEntry = RaceEntry.builder()
+                            .race(race)
+                            .registration(finalRegistration)
+                            .invitation(finalInvitation)
+                            .horse(horse)
+                            .jockey(finalInvitation.getJockey())
+                            .gateNumber(null)
+                            .handicapWeight(calculatedHandicapWeight)
+                            .entryStatus("DECLARED")
+                            .build();
+                    return raceEntryRepository.save(newEntry);
+                });
         if (!jockeyRaceRegistrationRepository.existsByRaceRaceIdAndJockeyJockeyIdAndStatus(
                 race.getRaceId(),
                 jockey.getJockeyId(),
@@ -244,7 +337,12 @@ public class RaceInvitationService {
         requireRole(currentUser, Role.JOCKEY);
 
         Jockey jockey = jockeyRepository.findByUserUserId(currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey profile not found"));
+                .orElseGet(() -> jockeyRepository.save(
+                        Jockey.builder()
+                                .user(currentUser)
+                                .status("available")
+                                .build()
+                ));
 
         RaceInvitation invitation = raceInvitationRepository.findById(invitationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found"));
@@ -317,6 +415,7 @@ public class RaceInvitationService {
                 .canAccept(canAct)
                 .canDecline(canAct)
                 .entryId(entryId)
+                .scheduledTime(invitation.getRaceRegistration().getRace().getScheduledTime())
                 .build();
     }
 }

@@ -300,7 +300,7 @@ public class PrizeCalculationIntegrationTests {
                 .horse(horse1)
                 .jockey(jockey1)
                 .gateNumber((short) 1)
-                .entryStatus("declared")
+                .entryStatus("PASSED")
                 .build());
 
         RaceRegistration reg2 = raceRegistrationRepository.save(RaceRegistration.builder()
@@ -316,7 +316,7 @@ public class PrizeCalculationIntegrationTests {
                 .horse(horse2)
                 .jockey(jockey2)
                 .gateNumber((short) 2)
-                .entryStatus("declared")
+                .entryStatus("PASSED")
                 .build());
 
         RaceRegistration reg3 = raceRegistrationRepository.save(RaceRegistration.builder()
@@ -332,7 +332,7 @@ public class PrizeCalculationIntegrationTests {
                 .horse(horse3)
                 .jockey(jockey3)
                 .gateNumber((short) 3)
-                .entryStatus("declared")
+                .entryStatus("PASSED")
                 .build());
 
         // Create provisional Results

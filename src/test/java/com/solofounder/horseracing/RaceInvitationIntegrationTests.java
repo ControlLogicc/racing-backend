@@ -184,13 +184,12 @@ public class RaceInvitationIntegrationTests {
         jockeyUser = userRepository.findByEmail("jockey@test-invitation.com").orElseThrow();
 
         // Create Jockey Profile
-        jockeyProfile = jockeyRepository.save(Jockey.builder()
-                .user(jockeyUser)
-                .weight(new BigDecimal("54.50"))
-                .experienceYears((short) 5)
-                .status("available")
-                .createdAt(LocalDateTime.now())
-                .build());
+        jockeyProfile = jockeyRepository.findByUserUserId(jockeyUser.getUserId())
+                .orElseGet(() -> Jockey.builder().user(jockeyUser).build());
+        jockeyProfile.setWeight(new BigDecimal("54.50"));
+        jockeyProfile.setExperienceYears((short) 5);
+        jockeyProfile.setStatus("available");
+        jockeyProfile = jockeyRepository.save(jockeyProfile);
 
         // Setup Season, Racecourse, Meeting, Condition, Race
         Season season = seasonRepository.save(Season.builder()
@@ -235,7 +234,7 @@ public class RaceInvitationIntegrationTests {
                 .scheduledTime(LocalDateTime.now().plusDays(5))
                 .registrationOpenAt(LocalDateTime.now().minusDays(1))
                 .registrationCloseAt(LocalDateTime.now().plusDays(2))
-                .status(RaceStatus.OPEN_FOR_ENTRY)
+                .status(RaceStatus.SCHEDULED)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build());
@@ -461,10 +460,10 @@ public class RaceInvitationIntegrationTests {
         AuthResponse jockeyAuth2 = objectMapper.readValue(jockeyRes2.getResponse().getContentAsString(), AuthResponse.class);
         String jockey2Token = "Bearer " + jockeyAuth2.getToken();
 
-        // Accept using jockey 2 token -> should return 404 (hidden resource)
+        // Accept using jockey 2 token -> should return 403 Forbidden
         mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/accept")
                 .header("Authorization", jockey2Token))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -544,6 +543,12 @@ public class RaceInvitationIntegrationTests {
 
         AuthResponse jockeyAuth2 = objectMapper.readValue(jockeyRes2.getResponse().getContentAsString(), AuthResponse.class);
         User jockeyUser2 = userRepository.findByEmail("jockey2@test-invitation.com").orElseThrow();
+        Jockey jockeyProfile2 = jockeyRepository.findByUserUserId(jockeyUser2.getUserId())
+                .orElseGet(() -> Jockey.builder().user(jockeyUser2).build());
+        jockeyProfile2.setWeight(new BigDecimal("53.50"));
+        jockeyProfile2.setExperienceYears((short) 4);
+        jockeyProfile2.setStatus("available");
+        jockeyProfile2 = jockeyRepository.save(jockeyProfile2);
         Jockey jockeyProfile2 = jockeyRepository.save(Jockey.builder()
                 .user(jockeyUser2)
                 .weight(new BigDecimal("53.50"))
@@ -643,6 +648,8 @@ public class RaceInvitationIntegrationTests {
         assertEquals(testRace.getRaceId(), entry.getRace().getRaceId());
         assertEquals(ownerHorse.getHorseId(), entry.getHorse().getHorseId());
         assertEquals(jockeyProfile.getJockeyId(), entry.getJockey().getJockeyId());
+        assertNull(entry.getGateNumber());
+        assertEquals(0, new BigDecimal("50.00").compareTo(entry.getHandicapWeight()));
         assertEquals(RaceInvitationStatus.USED,
                 raceInvitationRepository.findById(invitation.getInvitationId()).orElseThrow().getInvitationStatus());
 

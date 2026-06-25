@@ -14,6 +14,7 @@ public interface RaceRepository extends JpaRepository<Race, Long> {
 
     List<Race> findByStaffStaffId(Long staffId);
 
+    List<Race> findByRefereeRefereeId(Long refereeId);
     @Query("SELECT r FROM Race r " +
             "JOIN FETCH r.raceMeeting m " +
             "JOIN FETCH m.racecourse " +

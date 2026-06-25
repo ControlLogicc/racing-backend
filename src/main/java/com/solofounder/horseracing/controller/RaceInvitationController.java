@@ -27,7 +27,7 @@ public class RaceInvitationController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('JOCKEY') or hasRole('OWNER')")
+    @PreAuthorize("hasRole('JOCKEY') or hasRole('OWNER') or hasRole('STAFF') or hasRole('ADMIN')")
     public ResponseEntity<List<InvitationResponse>> getInvitations(
             @RequestParam(required = false) String status) {
         return ResponseEntity.ok(raceInvitationService.getInvitations(status));

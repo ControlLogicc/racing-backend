@@ -1,16 +1,21 @@
 package com.solofounder.horseracing.service;
 
+import com.solofounder.horseracing.dto.race.RaceResponse;
 import com.solofounder.horseracing.dto.referee.CreateRefereeRequest;
 import com.solofounder.horseracing.dto.referee.RefereeResponse;
 import com.solofounder.horseracing.dto.referee.UpdateRefereeRequest;
+import com.solofounder.horseracing.model.Race;
 import com.solofounder.horseracing.model.Referee;
 import com.solofounder.horseracing.model.User;
 import com.solofounder.horseracing.model.enums.RefereeStatus;
 import com.solofounder.horseracing.model.enums.Role;
+import com.solofounder.horseracing.repository.RaceRepository;
 import com.solofounder.horseracing.repository.RefereeRepository;
 import com.solofounder.horseracing.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -25,10 +30,24 @@ public class RefereeService {
 
     private final RefereeRepository refereeRepository;
     private final UserRepository userRepository;
+    private final RaceRepository raceRepository;
 
     public List<RefereeResponse> getAllReferees() {
         return refereeRepository.findAll().stream()
                 .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public RefereeResponse getCurrentReferee() {
+        return toResponse(getCurrentRefereeProfile());
+    }
+
+    @Transactional(readOnly = true)
+    public List<RaceResponse> getCurrentRefereeRaces() {
+        Referee referee = getCurrentRefereeProfile();
+        return raceRepository.findByRefereeRefereeId(referee.getRefereeId()).stream()
+                .map(this::toRaceResponse)
                 .toList();
     }
 
@@ -90,6 +109,52 @@ public class RefereeService {
                 .licenseNo(referee.getLicenseNo())
                 .status(referee.getStatus() != null ? referee.getStatus().name() : null)
                 .createdAt(referee.getCreatedAt())
+                .build();
+    }
+
+    private Referee getCurrentRefereeProfile() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+        }
+        User user = userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized"));
+        if (user.getRole() != Role.REFEREE) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+        return refereeRepository.findByUserUserId(user.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Referee profile not found"));
+    }
+
+    private RaceResponse toRaceResponse(Race race) {
+        var meeting = race.getRaceMeeting();
+        var condition = race.getRaceCondition();
+        var racecourse = meeting != null ? meeting.getRacecourse() : null;
+        var staff = race.getStaff();
+        var referee = race.getReferee();
+        return RaceResponse.builder()
+                .raceId(race.getRaceId())
+                .meetingId(meeting != null ? meeting.getMeetingId() : null)
+                .meetingName(meeting != null ? meeting.getMeetingName() : null)
+                .meetingDate(meeting != null ? meeting.getMeetingDate() : null)
+                .racecourseName(racecourse != null ? racecourse.getRacecourseName() : null)
+                .conditionId(condition != null ? condition.getConditionId() : null)
+                .conditionName(condition != null ? condition.getConditionName() : null)
+                .distanceMeters(condition != null ? condition.getDistance() : null)
+                .trackType(condition != null ? condition.getTrackType() : null)
+                .classRequirement(condition != null ? condition.getClassRequirement() : null)
+                .staffId(staff != null ? staff.getStaffId() : null)
+                .staffName(staff != null && staff.getUser() != null ? staff.getUser().getFullName() : null)
+                .refereeId(referee != null ? referee.getRefereeId() : null)
+                .refereeName(referee != null && referee.getUser() != null ? referee.getUser().getFullName() : null)
+                .raceName(race.getRaceName())
+                .raceNo(race.getRaceNo())
+                .scheduledTime(race.getScheduledTime())
+                .registrationOpenAt(race.getRegistrationOpenAt())
+                .registrationCloseAt(race.getRegistrationCloseAt())
+                .status(race.getStatus() != null ? race.getStatus().name() : null)
+                .createdAt(race.getCreatedAt())
+                .updatedAt(race.getUpdatedAt())
                 .build();
     }
 }

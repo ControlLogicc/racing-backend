@@ -31,16 +31,27 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/auth/**",
+                                "/referee-pre-check.html",
                                 "/error",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/races/**",
+                                "/api/results/**",
+                                "/api/admin/horses/**",
+                                "/api/admin/race-meetings/**",
+                                "/api/admin/prize-structures/**"
+                        ).permitAll()
                         .requestMatchers("/api/owner/**").hasRole("OWNER")
                         .requestMatchers("/api/jockey/**").hasRole("JOCKEY")
-                        .requestMatchers(HttpMethod.GET, "/api/staff").hasRole("STAFF")
+                        .requestMatchers(HttpMethod.GET, "/api/staff").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers(HttpMethod.POST, "/api/staff").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/staff/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/admin/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/admin/races/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/races/*/recalculate-prizes").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/race-management/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/referees/**").authenticated()

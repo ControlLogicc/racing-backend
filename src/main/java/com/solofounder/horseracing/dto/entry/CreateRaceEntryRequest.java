@@ -14,8 +14,8 @@ public class CreateRaceEntryRequest {
 
     private Long registrationId;
 
-    @NotNull(message = "Invitation ID is required")
-    private Long invitationId;
+    @NotNull(message = "Jockey ID is required")
+    private Long jockeyId;
 
     @Min(value = 1, message = "Gate number must be at least 1")
     private Short gateNumber;
