@@ -549,13 +549,6 @@ public class RaceInvitationIntegrationTests {
         jockeyProfile2.setExperienceYears((short) 4);
         jockeyProfile2.setStatus("available");
         jockeyProfile2 = jockeyRepository.save(jockeyProfile2);
-        Jockey jockeyProfile2 = jockeyRepository.save(Jockey.builder()
-                .user(jockeyUser2)
-                .weight(new BigDecimal("53.50"))
-                .experienceYears((short) 4)
-                .status("available")
-                .createdAt(LocalDateTime.now())
-                .build());
         jockeyRaceRegistrationRepository.save(JockeyRaceRegistration.builder()
                 .race(testRace)
                 .jockey(jockeyProfile2)
@@ -628,9 +621,7 @@ public class RaceInvitationIntegrationTests {
         assertNull(response.getEntryId());
         assertFalse(raceEntryRepository.existsByRegistrationRegistrationId(approvedRegistration.getRegistrationId()));
 
-        CreateRaceEntryRequest request = CreateRaceEntryRequest.builder()
-                .invitationId(invitation.getInvitationId())
-                .build();
+        CreateRaceEntryRequest request = CreateRaceEntryRequest.builder().invitationId(invitation.getInvitationId()).handicapWeight(new BigDecimal("50.00")).build();
 
         MvcResult createEntryResult = mockMvc.perform(post("/api/entries")
                 .header("Authorization", adminToken)

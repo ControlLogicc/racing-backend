@@ -2,8 +2,8 @@ package com.solofounder.horseracing.service;
 
 import com.solofounder.horseracing.dto.race.RecalculatePrizesResponse;
 import com.solofounder.horseracing.model.*;
-import com.solofounder.horseracing.model.enums.RaceStatus;
 import com.solofounder.horseracing.model.enums.RaceResultStatus;
+import com.solofounder.horseracing.model.enums.RaceStatus;
 import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -15,10 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.HashSet;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +37,7 @@ public class PrizeCalculationService {
         // 1. Retrieve Race
         Race race = raceRepository.findById(raceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race not found"));
+
         requireRecalculatePermission(race);
 
         // 2. Check Race status: must be OFFICIAL
@@ -63,15 +64,16 @@ public class PrizeCalculationService {
         // 4. Update result prizes & scores
         for (RaceResult result : results) {
             boolean eligible = result.getPosition() != null && result.getPosition() > 0
-                    && result.getResultStatus() != RaceResultStatus.DISQUALIFIED;
-            
                     && (result.getResultStatus() == RaceResultStatus.OFFICIAL || result.getResultStatus() == RaceResultStatus.AMENDED);
 
             if (eligible) {
                 if (result.getResultStatus() == RaceResultStatus.PROVISIONAL) {
                     result.setResultStatus(RaceResultStatus.OFFICIAL);
                 }
-                Optional<PrizeStructure> prizeOpt = prizeStructureRepository.findByRaceRaceIdAndPosition(raceId, result.getPosition());
+
+                Optional<PrizeStructure> prizeOpt =
+                        prizeStructureRepository.findByRaceRaceIdAndPosition(raceId, result.getPosition());
+
                 if (prizeOpt.isPresent()) {
                     PrizeStructure ps = prizeOpt.get();
                     result.setPrizeAmount(ps.getAmount());
@@ -79,7 +81,7 @@ public class PrizeCalculationService {
                 } else {
                     // No manual prize structure — apply automatic position-based scoring rule:
                     // Top 3: +5 / +3 / +1
-                    // Bottom 3: -1 / -3 / -5  (counting from last place up)
+                    // Bottom 3: -1 / -3 / -5
                     result.setPrizeAmount(BigDecimal.ZERO);
                     result.setScoreAwarded(resolveAutomaticScore(result.getPosition(), totalFinishers));
                 }
@@ -91,6 +93,7 @@ public class PrizeCalculationService {
             if (result.getPrizeAmount() != null) {
                 totalPrizeAmount = totalPrizeAmount.add(result.getPrizeAmount());
             }
+
             if (result.getScoreAwarded() != null) {
                 totalScoreAwarded = totalScoreAwarded.add(result.getScoreAwarded());
             }
@@ -109,11 +112,11 @@ public class PrizeCalculationService {
                     horse.getHorseId(),
                     RaceResultStatus.DISQUALIFIED
             );
+
             if (currentScore == null) {
                 currentScore = BigDecimal.ZERO;
             }
-            
-            // Re-classify class using the existing helper method
+
             Short newClass = horseService.calculateHorseClass(currentScore);
 
             long totalWins = raceResultRepository.countWinsByHorseIdExcludingStatus(
@@ -141,49 +144,70 @@ public class PrizeCalculationService {
 
     private void requireRecalculatePermission(Race race) {
         User user = getCurrentUser();
+
         if (user.getRole() == Role.ADMIN) {
             return;
         }
+
         if (user.getRole() == Role.STAFF) {
             Staff staff = staffRepository.findByUserUserId(user.getUserId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Staff profile not found"));
+
             if (race.getStaff() != null && race.getStaff().getStaffId().equals(staff.getStaffId())) {
                 return;
             }
         }
+
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
     }
 
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
         if (authentication == null || authentication.getName() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
         }
+
         return userRepository.findByEmail(authentication.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized"));
+    }
+
     /**
-     * Automatic position-based scoring rule (applied when no PrizeStructure is defined):
-     *   - 1st place : +5
-     *   - 2nd place : +3
-     *   - 3rd place : +1
-     *   - Last place     (N)   : -5
-     *   - 2nd last place (N-1) : -3
-     *   - 3rd last place (N-2) : -1
-     *   - All other positions  :  0
-     *
-     * @param position      the finish position (1-indexed)
-     * @param totalFinishers total number of eligible finishers in this race
+     * Automatic position-based scoring rule:
+     * - 1st place: +5
+     * - 2nd place: +3
+     * - 3rd place: +1
+     * - Last place: -5
+     * - 2nd last place: -3
+     * - 3rd last place: -1
+     * - Other positions: 0
      */
     private BigDecimal resolveAutomaticScore(int position, int totalFinishers) {
         // Top 3
-        if (position == 1) return BigDecimal.valueOf(5);
-        if (position == 2) return BigDecimal.valueOf(3);
-        if (position == 3) return BigDecimal.valueOf(1);
+        if (position == 1) {
+            return BigDecimal.valueOf(5);
+        }
 
-        // Bottom 3 (only meaningful when race has enough finishers)
-        if (totalFinishers >= 1 && position == totalFinishers)     return BigDecimal.valueOf(-5);
-        if (totalFinishers >= 2 && position == totalFinishers - 1) return BigDecimal.valueOf(-3);
-        if (totalFinishers >= 3 && position == totalFinishers - 2) return BigDecimal.valueOf(-1);
+        if (position == 2) {
+            return BigDecimal.valueOf(3);
+        }
+
+        if (position == 3) {
+            return BigDecimal.valueOf(1);
+        }
+
+        // Bottom 3
+        if (totalFinishers >= 1 && position == totalFinishers) {
+            return BigDecimal.valueOf(-5);
+        }
+
+        if (totalFinishers >= 2 && position == totalFinishers - 1) {
+            return BigDecimal.valueOf(-3);
+        }
+
+        if (totalFinishers >= 3 && position == totalFinishers - 2) {
+            return BigDecimal.valueOf(-1);
+        }
 
         return BigDecimal.ZERO;
     }

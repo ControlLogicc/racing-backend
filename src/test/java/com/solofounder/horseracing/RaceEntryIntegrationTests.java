@@ -7,6 +7,7 @@ import com.solofounder.horseracing.model.*;
 import com.solofounder.horseracing.model.enums.*;
 import com.solofounder.horseracing.repository.*;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -87,6 +88,9 @@ public class RaceEntryIntegrationTests {
     @Autowired
     private RefereeReportRepository refereeReportRepository;
 
+    @Autowired
+    private JockeyRaceRegistrationRepository jockeyRaceRegistrationRepository;
+
     private String adminToken;
     private String staffToken;
     private String otherStaffToken;
@@ -111,6 +115,7 @@ public class RaceEntryIntegrationTests {
         raceEntryRepository.deleteAll();
         raceInvitationRepository.deleteAll();
         raceRegistrationRepository.deleteAll();
+        jockeyRaceRegistrationRepository.deleteAll();
         raceRepository.deleteAll();
 
         String suffix = String.valueOf(System.nanoTime());
@@ -328,6 +333,20 @@ public class RaceEntryIntegrationTests {
                 .invitationStatus(RaceInvitationStatus.ACCEPTED)
                 .sentAt(LocalDateTime.now())
                 .build());
+
+        jockeyRaceRegistrationRepository.save(JockeyRaceRegistration.builder()
+                .race(testRace)
+                .jockey(jockeyProfile1)
+                .status(JockeyRaceRegistrationStatus.REGISTERED)
+                .registeredAt(LocalDateTime.now())
+                .build());
+
+        jockeyRaceRegistrationRepository.save(JockeyRaceRegistration.builder()
+                .race(testRace)
+                .jockey(jockeyProfile2)
+                .status(JockeyRaceRegistrationStatus.REGISTERED)
+                .registeredAt(LocalDateTime.now())
+                .build());
     }
 
     @Test
@@ -351,7 +370,6 @@ public class RaceEntryIntegrationTests {
         assertEquals("declared", response.getEntryStatus());
         assertEquals((short) 1, response.getGateNumber());
         assertEquals(new BigDecimal("50.5"), response.getHandicapWeight());
-        assertEquals(staffProfile.getStaffId(), response.getConfirmedByStaffId());
 
         // Verify Invitation is now USED
         RaceInvitation dbInv = raceInvitationRepository.findById(acceptedInv1.getInvitationId()).orElseThrow();
@@ -376,7 +394,6 @@ public class RaceEntryIntegrationTests {
 
         RaceEntryResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), RaceEntryResponse.class);
         assertNotNull(response.getEntryId());
-        assertNull(response.getConfirmedByStaffId());
     }
 
     @Test
@@ -570,7 +587,7 @@ public class RaceEntryIntegrationTests {
                 .andReturn();
 
         RaceEntryResponse response = objectMapper.readValue(updatedResult.getResponse().getContentAsString(), RaceEntryResponse.class);
-        assertEquals(new BigDecimal("51.0"), response.getActualWeight());
+        assertEquals(new BigDecimal("51.0"), response.getJockeyActualWeight());
         assertEquals("passed", response.getWeightCheckStatus());
     }
 
@@ -610,11 +627,11 @@ public class RaceEntryIntegrationTests {
         RaceEntry refreshedEntry1 = raceEntryRepository.findById(entry1.getEntryId()).orElseThrow();
         RaceEntry refreshedEntry2 = raceEntryRepository.findById(entry2.getEntryId()).orElseThrow();
         assertEquals(0, new BigDecimal("55.00").compareTo(refreshedEntry1.getHandicapWeight()));
-        assertEquals(0, new BigDecimal("55.20").compareTo(refreshedEntry1.getActualWeight()));
+        assertEquals(0, new BigDecimal("55.20").compareTo(refreshedEntry1.getJockeyActualWeight()));
         assertEquals("passed", refreshedEntry1.getWeightCheckStatus());
         assertEquals("ready", refreshedEntry1.getEntryStatus());
         assertEquals(0, new BigDecimal("55.00").compareTo(refreshedEntry2.getHandicapWeight()));
-        assertEquals(0, new BigDecimal("58.50").compareTo(refreshedEntry2.getActualWeight()));
+        assertEquals(0, new BigDecimal("58.50").compareTo(refreshedEntry2.getJockeyActualWeight()));
         assertEquals("failed", refreshedEntry2.getWeightCheckStatus());
         assertEquals("scratched", refreshedEntry2.getEntryStatus());
     }
@@ -811,7 +828,6 @@ public class RaceEntryIntegrationTests {
                 .invitation(invitation)
                 .horse(horse)
                 .jockey(jockey)
-                .confirmedByStaff(staffProfile)
                 .gateNumber(gateNumber)
                 .handicapWeight(new BigDecimal("55.00"))
                 .entryStatus("declared")
@@ -828,6 +844,9 @@ public class RaceEntryIntegrationTests {
                         .build()))
                 .build();
     }
+
+    @Nested
+    class MoreTests {
         @Autowired
         private MockMvc mockMvc;
 
@@ -1167,8 +1186,8 @@ public class RaceEntryIntegrationTests {
                                 RaceEntryResponse.class);
                 assertNotNull(response.getEntryId());
                 assertEquals("declared", response.getEntryStatus());
-                assertNull(response.getGateNumber());
-                assertNull(response.getHandicapWeight());
+                assertEquals((short) 1, response.getGateNumber());
+                assertEquals(new BigDecimal("50.5"), response.getHandicapWeight());
 
                 // Verify Invitation is now USED
                 RaceInvitation dbInv = raceInvitationRepository.findById(acceptedInv1.getInvitationId()).orElseThrow();
@@ -1591,7 +1610,7 @@ public class RaceEntryIntegrationTests {
                                 .build();
 
                 MvcResult updatedResult = mockMvc.perform(put("/api/entries/" + created.getEntryId() + "/status")
-                                .header("Authorization", staffToken)
+                                .header("Authorization", adminToken)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(statusReq)))
                                 .andExpect(status().isOk())
@@ -1649,4 +1668,5 @@ public class RaceEntryIntegrationTests {
                                                 .build()))
                                 .build();
         }
+    }
 }

@@ -51,6 +51,12 @@ public class StaffController {
         return ResponseEntity.ok(staffService.getCurrentStaffRegistrations());
     }
 
+    @GetMapping("/horses/pending-rating")
+    @PreAuthorize("hasAnyRole('STAFF', 'ADMIN')")
+    public ResponseEntity<List<HorseResponse>> getPendingRatingHorses() {
+        return ResponseEntity.ok(horseService.getPendingRatingHorses());
+    }
+
     @PostMapping
     public ResponseEntity<StaffResponse> createStaff(@Valid @RequestBody CreateStaffRequest request) {
         return ResponseEntity.ok(staffService.createStaff(request));
@@ -68,7 +74,7 @@ public class StaffController {
      * PUT /api/staff/horses/{horseId}/verify-rating
      */
     @PutMapping("/horses/{horseId}/verify-rating")
-    @PreAuthorize("hasRole('STAFF')")
+    @PreAuthorize("hasAnyRole('STAFF', 'ADMIN')")
     public ResponseEntity<HorseResponse> verifyHorseRating(
             @PathVariable Long horseId,
             @Valid @RequestBody(required = false) VerifyHorseRatingRequest request) {
@@ -81,7 +87,7 @@ public class StaffController {
      * PUT /api/staff/horses/{horseId}/reject-rating
      */
     @PutMapping("/horses/{horseId}/reject-rating")
-    @PreAuthorize("hasRole('STAFF')")
+    @PreAuthorize("hasAnyRole('STAFF', 'ADMIN')")
     public ResponseEntity<HorseResponse> rejectHorseRating(@PathVariable Long horseId) {
         return ResponseEntity.ok(horseService.rejectHorseRating(horseId));
     }

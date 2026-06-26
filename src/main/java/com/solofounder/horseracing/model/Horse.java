@@ -42,7 +42,7 @@ public class Horse {
     @Column(name = "horse_class")
     private Short horseClass;
 
-    @Column(name = "health_Note", length = 255)
+    @Column(name = "health_Note", length = 2048)
     private String healthNote;
 
     @Column(name = "status", nullable = false, length = 20)
@@ -78,7 +78,7 @@ public class Horse {
     @PrePersist
     protected void onCreate() {
         if (this.currentScore == null) {
-            this.currentScore = BigDecimal.ZERO;
+            this.currentScore = BigDecimal.valueOf(50);
         }
         if (this.horseClass == null) {
             this.horseClass = 5;

@@ -6,6 +6,7 @@ import com.solofounder.horseracing.service.HorseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,6 +21,12 @@ public class AdminHorseController {
     @GetMapping
     public ResponseEntity<List<HorseResponse>> getAllHorses() {
         return ResponseEntity.ok(horseService.getAllHorses());
+    }
+
+    @GetMapping("/pending-rating")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<HorseResponse>> getPendingRatingHorses() {
+        return ResponseEntity.ok(horseService.getPendingRatingHorses());
     }
 
     @GetMapping("/{id}")
