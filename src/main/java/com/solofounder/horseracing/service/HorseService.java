@@ -32,6 +32,8 @@ public class HorseService {
 
     private static final Set<String> VALID_GENDERS = Set.of("M", "F");
     private static final Set<String> VALID_STATUSES = Set.of("ACTIVE", "INJURED", "RETIRED", "SUSPENDED");
+    private static final BigDecimal NEW_HORSE_INITIAL_SCORE = BigDecimal.valueOf(50);
+    private static final short DEFAULT_HORSE_CLASS = 5;
 
     private final HorseRepository horseRepository;
     private final UserRepository userRepository;
@@ -70,6 +72,10 @@ public class HorseService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "claimedClass is required for PREVIOUSLY_REGISTERED horses");
             }
+            if (trimToNull(request.getHealthNote()) == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "healthNote document link is required for PREVIOUSLY_REGISTERED horses");
+            }
         }
 
         Horse horse = Horse.builder()
@@ -78,8 +84,8 @@ public class HorseService {
                 .color(normalizeRequired(request.getColor(), "Color is required"))
                 .age(validateAge(request.getAge()))
                 .gender(normalizeGender(request.getGender()))
-                .currentScore(BigDecimal.ZERO)
-                .horseClass((short) 5)
+                .currentScore(regType == HorseRegistrationType.NEW ? NEW_HORSE_INITIAL_SCORE : BigDecimal.ZERO)
+                .horseClass((short) DEFAULT_HORSE_CLASS)
                 .totalWins(0)
                 .healthNote(trimToNull(request.getHealthNote()))
                 .status("active")
@@ -195,6 +201,14 @@ public class HorseService {
 
     public List<HorseResponse> getAllHorses() {
         return horseRepository.findAll().stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    public List<HorseResponse> getPendingRatingHorses() {
+        User currentUser = getCurrentUser();
+        requireStaffOrAdmin(currentUser);
+        return horseRepository.findPendingRatingHorses(HorseRegistrationType.PREVIOUSLY_REGISTERED).stream()
                 .map(this::toResponse)
                 .toList();
     }

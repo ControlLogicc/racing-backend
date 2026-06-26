@@ -31,11 +31,12 @@ public class CreateHorseRequest {
     @Schema(example = "M", allowableValues = {"M", "F"})
     private String gender;
 
+    @Size(max = 2048, message = "Health note must be at most 2048 characters")
     @Schema(example = "Healthy")
     private String healthNote;
 
     /**
-     * NEW = backend auto-assigns rating (score=0, class=5), no Staff approval needed.
+     * NEW = backend auto-assigns rating (score=50, class=5), no Staff approval needed.
      * PREVIOUSLY_REGISTERED = Owner declares previous rating; Staff must verify before race registration.
      */
     @Schema(example = "NEW", allowableValues = {"NEW", "PREVIOUSLY_REGISTERED"})
@@ -51,4 +52,5 @@ public class CreateHorseRequest {
     @Max(value = 5, message = "Claimed class must be between 1 and 5")
     @Schema(example = "4", minimum = "1", maximum = "5")
     private Short claimedClass;
+
 }

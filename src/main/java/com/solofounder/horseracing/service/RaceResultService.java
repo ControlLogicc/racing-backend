@@ -240,7 +240,7 @@ public class RaceResultService {
     }
 
     private PrizeValues calculatePrizeValues(Long raceId, Short position, RaceResultStatus resultStatus) {
-        if (resultStatus == RaceResultStatus.DISQUALIFIED) {
+        if (resultStatus != RaceResultStatus.OFFICIAL && resultStatus != RaceResultStatus.AMENDED) {
             return new PrizeValues(BigDecimal.ZERO, BigDecimal.ZERO);
         }
         return prizeStructureRepository.findByRaceRaceIdAndPosition(raceId, position)

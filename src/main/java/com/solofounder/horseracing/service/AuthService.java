@@ -112,6 +112,10 @@ public class AuthService {
     }
 
     public User adminCreateUser(CreateInternalUserRequest request) {
+        Role targetRole = request.getRole();
+        if (targetRole != Role.ADMIN && targetRole != Role.STAFF && targetRole != Role.REFEREE && targetRole != Role.JOCKEY) {
+            throw new IllegalArgumentException("Invalid role for internal user");
+        }
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new IllegalStateException("Email already registered");
         }

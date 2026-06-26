@@ -26,6 +26,7 @@ import com.solofounder.horseracing.dto.registration.RegistrationResponse;
 import com.solofounder.horseracing.model.enums.RaceInvitationStatus;
 import com.solofounder.horseracing.model.enums.RaceRegistrationStatus;
 import com.solofounder.horseracing.model.*;
+import com.solofounder.horseracing.model.enums.HorseRegistrationType;
 import com.solofounder.horseracing.model.enums.RaceStatus;
 import com.solofounder.horseracing.model.enums.RefereeStatus;
 import com.solofounder.horseracing.model.enums.Role;
@@ -129,8 +130,6 @@ class HorsesRacingApplicationTests {
         @Autowired
         private com.solofounder.horseracing.repository.RefereeReportRepository refereeReportRepository;
 
-        @Autowired
-        private com.solofounder.horseracing.repository.RaceEntryRepository raceEntryRepository;
 
         private static final java.util.Set<Long> preExistingUserIds = new java.util.HashSet<>();
 
@@ -682,8 +681,10 @@ class HorsesRacingApplicationTests {
                 assertEquals("M", response.getGender());
                 assertEquals("ACTIVE", response.getStatus()); // Default: ACTIVE
                 assertEquals("Healthy", response.getHealthNote());
-                assertEquals(0, BigDecimal.ZERO.compareTo(response.getCurrentScore())); // Default: 0
+                assertEquals(0, BigDecimal.valueOf(50).compareTo(response.getCurrentScore())); // Default: 50
                 assertEquals((short) 5, response.getHorseClass()); // Default: 5
+                assertEquals("NEW", response.getRegistrationType());
+                assertTrue(response.isRatingVerified());
                 assertNotNull(response.getOwnerId());
         }
 
@@ -1061,8 +1062,170 @@ class HorsesRacingApplicationTests {
 
                 HorseResponse response = objectMapper.readValue(result.getResponse().getContentAsString(),
                                 HorseResponse.class);
-                assertEquals(0, BigDecimal.ZERO.compareTo(response.getCurrentScore())); // ignored, default 0
+                assertEquals(0, BigDecimal.valueOf(50).compareTo(response.getCurrentScore())); // ignored, default 50
                 assertEquals((short) 5, response.getHorseClass()); // ignored, default 5
+        }
+
+        @Test
+        void testPreviouslyRegisteredHorseRequiresClaimAndDocument() throws Exception {
+                String ownerToken = getHorseOwnerToken();
+
+                CreateHorseRequest missingDocument = CreateHorseRequest.builder()
+                                .horseName("Previous Missing Document")
+                                .color("Brown")
+                                .age((short) 5)
+                                .gender("M")
+                                .registrationType("PREVIOUSLY_REGISTERED")
+                                .claimedScore(BigDecimal.valueOf(42))
+                                .claimedClass((short) 3)
+                                .build();
+
+                mockMvc.perform(post("/api/owner/horses")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(missingDocument)))
+                                .andExpect(status().isBadRequest());
+
+                CreateHorseRequest missingClaim = CreateHorseRequest.builder()
+                                .horseName("Previous Missing Claim")
+                                .color("Brown")
+                                .age((short) 5)
+                                .gender("M")
+                                .registrationType("PREVIOUSLY_REGISTERED")
+                                .healthNote("https://drive.google.com/file/d/test/view")
+                                .build();
+
+                mockMvc.perform(post("/api/owner/horses")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(missingClaim)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testPreviouslyRegisteredHorseAppearsInPendingRatingListAndLongLinkWorks() throws Exception {
+                String ownerToken = getHorseOwnerToken();
+                Staff staff = createStaff("horse.pending.staff@example.com", "Horse Pending Staff", "HPST01");
+                String longDriveUrl = "https://drive.google.com/file/d/" + "a".repeat(1500) + "/view?usp=sharing";
+
+                CreateHorseRequest previousHorse = CreateHorseRequest.builder()
+                                .horseName("Pending Rating Horse")
+                                .color("Bay")
+                                .age((short) 6)
+                                .gender("F")
+                                .registrationType("PREVIOUSLY_REGISTERED")
+                                .claimedScore(BigDecimal.valueOf(64.5))
+                                .claimedClass((short) 2)
+                                .healthNote(longDriveUrl)
+                                .build();
+
+                MvcResult createResult = mockMvc.perform(post("/api/owner/horses")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(previousHorse)))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                HorseResponse created = objectMapper.readValue(createResult.getResponse().getContentAsString(),
+                                HorseResponse.class);
+                assertEquals("PREVIOUSLY_REGISTERED", created.getRegistrationType());
+                assertFalse(created.isRatingVerified());
+                assertEquals(longDriveUrl, created.getHealthNote());
+
+                CreateHorseRequest newHorse = CreateHorseRequest.builder()
+                                .horseName("New Rating Horse")
+                                .color("Black")
+                                .age((short) 3)
+                                .gender("M")
+                                .registrationType("NEW")
+                                .build();
+
+                mockMvc.perform(post("/api/owner/horses")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(newHorse)))
+                                .andExpect(status().isOk());
+
+                MvcResult pendingResult = mockMvc.perform(get("/api/staff/horses/pending-rating")
+                                .header("Authorization", getTokenFor(staff.getUser())))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                HorseResponse[] responses = objectMapper.readValue(pendingResult.getResponse().getContentAsString(),
+                                HorseResponse[].class);
+                assertTrue(java.util.Arrays.stream(responses)
+                                .anyMatch(response -> response.getHorseId().equals(created.getHorseId())
+                                                && "Pending Rating Horse".equals(response.getHorseName())
+                                                && !response.isRatingVerified()));
+                assertTrue(java.util.Arrays.stream(responses)
+                                .noneMatch(response -> "New Rating Horse".equals(response.getHorseName())));
+
+                mockMvc.perform(get("/api/admin/horses/pending-rating")
+                                .header("Authorization", getAdminToken()))
+                                .andExpect(status().isOk());
+
+                mockMvc.perform(get("/api/staff/horses/pending-rating"))
+                                .andExpect(status().isUnauthorized());
+
+                mockMvc.perform(get("/api/staff/horses/pending-rating")
+                                .header("Authorization", ownerToken))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void testPreviouslyRegisteredHorseCannotRegisterRaceUntilVerified() throws Exception {
+                Staff staff = createStaff("horse.verify.staff@example.com", "Horse Verify Staff", "HVST01");
+                Referee referee = createReferee("horse.verify.ref@example.com", "Horse Verify Ref", "HVRF01");
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                Race race = setupRaceHierarchy(staff, referee, "SCHEDULED",
+                                now.minusHours(1), now.plusHours(1), now.plusHours(5));
+
+                User owner = createOwnerUser("horse.verify.owner@example.com", "Horse Verify Owner");
+                String ownerToken = getTokenFor(owner);
+
+                CreateHorseRequest previousHorse = CreateHorseRequest.builder()
+                                .horseName("Verify Before Register Horse")
+                                .color("Chestnut")
+                                .age((short) 5)
+                                .gender("M")
+                                .registrationType("PREVIOUSLY_REGISTERED")
+                                .claimedScore(BigDecimal.valueOf(10))
+                                .claimedClass((short) 5)
+                                .healthNote("https://drive.google.com/file/d/verify-test/view")
+                                .build();
+
+                MvcResult createResult = mockMvc.perform(post("/api/owner/horses")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(previousHorse)))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                HorseResponse created = objectMapper.readValue(createResult.getResponse().getContentAsString(),
+                                HorseResponse.class);
+
+                CreateRegistrationRequest registrationRequest = CreateRegistrationRequest.builder()
+                                .raceId(race.getRaceId())
+                                .horseId(created.getHorseId())
+                                .build();
+
+                mockMvc.perform(post("/api/registrations")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(registrationRequest)))
+                                .andExpect(status().isBadRequest());
+
+                mockMvc.perform(put("/api/staff/horses/" + created.getHorseId() + "/verify-rating")
+                                .header("Authorization", getTokenFor(staff.getUser()))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"))
+                                .andExpect(status().isOk());
+
+                mockMvc.perform(post("/api/registrations")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(registrationRequest)))
+                                .andExpect(status().isCreated());
         }
 
         // Test 9.2: Owner updates own horse and does not modify horseClass or
