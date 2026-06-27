@@ -310,15 +310,53 @@ public class RaceRegistrationService {
     }
 
     private RegistrationResponse toResponse(RaceRegistration registration) {
+        Race race = registration.getRace();
+        Horse horse = registration.getHorse();
+
+        // Latest invitation for this registration
+        RaceInvitation latestInvitation = raceInvitationRepository
+                .findTopByRaceRegistrationRegistrationIdOrderByCreatedAtDesc(registration.getRegistrationId())
+                .orElse(null);
+
+        // Entry (if any)
+        RaceEntry entry = raceEntryRepository
+                .findByRegistrationRegistrationId(registration.getRegistrationId())
+                .orElse(null);
+
+        // Determine if owner can still invite a jockey
+        boolean hasActiveInvitation = raceInvitationRepository.existsByRaceRegistrationRegistrationIdAndInvitationStatusIn(
+                registration.getRegistrationId(),
+                ACTIVE_INVITATION_STATUSES);
+        boolean registrationStillOpen = race.getRegistrationCloseAt() == null
+                || !LocalDateTime.now().isAfter(race.getRegistrationCloseAt());
+        boolean canInviteJockey = registration.getStatus() == RaceRegistrationStatus.APPROVED
+                && registrationStillOpen
+                && entry == null
+                && !hasActiveInvitation;
+
+        String statusStr = registration.getStatus() != null ? registration.getStatus().name() : null;
+
         return RegistrationResponse.builder()
                 .registrationId(registration.getRegistrationId())
-                .raceId(registration.getRace().getRaceId())
-                .raceName(registration.getRace().getRaceName())
-                .horseId(registration.getHorse().getHorseId())
-                .horseName(registration.getHorse().getHorseName())
+                .raceId(race.getRaceId())
+                .raceName(race.getRaceName())
+                .horseId(horse.getHorseId())
+                .horseName(horse.getHorseName())
                 .ownerId(registration.getSubmittedBy().getUserId())
                 .ownerName(registration.getSubmittedBy().getFullName())
-                .status(registration.getStatus() != null ? registration.getStatus().name() : null)
+                .registrationStatus(statusStr)
+                .status(statusStr)
+                .submittedAt(registration.getSubmittedAt())
+                .reviewedAt(registration.getReviewedAt())
+                .scheduledTime(race.getScheduledTime())
+                .registrationCloseAt(race.getRegistrationCloseAt())
+                .invitationId(latestInvitation != null ? latestInvitation.getInvitationId() : null)
+                .invitationStatus(latestInvitation != null && latestInvitation.getInvitationStatus() != null
+                        ? latestInvitation.getInvitationStatus().name()
+                        : null)
+                .entryId(entry != null ? entry.getEntryId() : null)
+                .raceStatus(race.getStatus() != null ? race.getStatus().name() : null)
+                .canInviteJockey(canInviteJockey)
                 .build();
     }
 }

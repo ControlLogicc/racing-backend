@@ -16,6 +16,8 @@ import org.springframework.web.server.ResponseStatusException;
 import com.solofounder.horseracing.model.enums.RaceStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -31,6 +33,7 @@ public class RaceService {
     private final RefereeRepository refereeRepository;
     private final UserRepository userRepository;
     private final RaceRegistrationRepository raceRegistrationRepository;
+    private final RaceEntryRepository raceEntryRepository;
 
     public List<RaceResponse> getAllRaces() {
         return raceRepository.findAll().stream()
@@ -230,10 +233,18 @@ public class RaceService {
         }
 
         if (newStatus == RaceStatus.RUNNING) {
-            LocalDateTime now = LocalDateTime.now();
-            if (race.getRegistrationCloseAt() != null && now.isBefore(race.getRegistrationCloseAt())) {
-                throw new IllegalArgumentException("Race cannot start before registration close time");
+            // Nếu staff đã đóng đăng ký thủ công (CLOSED_FOR_ENTRY), cho phép start ngay
+            if (oldStatus != RaceStatus.CLOSED_FOR_ENTRY) {
+                LocalDateTime now = LocalDateTime.now();
+                if (race.getRegistrationCloseAt() != null && now.isBefore(race.getRegistrationCloseAt())) {
+                    throw new IllegalArgumentException("Race cannot start before registration close time");
+                }
             }
+        }
+
+        // Khi đóng cổng: recalculate handicap weight cho toàn bộ entry theo full field
+        if (newStatus == RaceStatus.CLOSED_FOR_ENTRY) {
+            recalculateHandicapWeights(race);
         }
 
         race.setStatus(newStatus);
@@ -365,6 +376,8 @@ public class RaceService {
                 .distanceMeters(race.getRaceCondition().getDistance())
                 .trackType(race.getRaceCondition().getTrackType())
                 .classRequirement(race.getRaceCondition().getClassRequirement())
+                .minEntries(race.getRaceCondition().getMinEntries())
+                .maxEntries(race.getRaceCondition().getMaxEntries())
                 .staffId(staff == null ? null : staff.getStaffId())
                 .staffName(staff == null ? null : staff.getUser().getFullName())
                 .refereeId(referee == null ? null : referee.getRefereeId())
@@ -418,5 +431,53 @@ public class RaceService {
             return raceRepository.save(race);
         }
         return race;
+    }
+
+    private void recalculateHandicapWeights(Race race) {
+        List<com.solofounder.horseracing.model.RaceEntry> entries =
+                raceEntryRepository.findByRaceRaceId(race.getRaceId());
+        if (entries.isEmpty()) return;
+
+        // Tìm topRating và topClass trong toàn bộ field
+        BigDecimal topRating = BigDecimal.ZERO;
+        short topClass = 5;
+        for (com.solofounder.horseracing.model.RaceEntry e : entries) {
+            if (e.getHorse() == null) continue;
+            BigDecimal score = e.getHorse().getCurrentScore() != null ? e.getHorse().getCurrentScore() : BigDecimal.ZERO;
+            if (score.compareTo(topRating) > 0) {
+                topRating = score;
+                topClass = e.getHorse().getHorseClass() != null ? e.getHorse().getHorseClass() : 5;
+            }
+        }
+
+        BigDecimal topWeightKg = resolveTopWeight(topClass);
+        BigDecimal minWeightKg = new BigDecimal("51.3");
+        BigDecimal lbToKg = new BigDecimal("0.454");
+
+        for (com.solofounder.horseracing.model.RaceEntry e : entries) {
+            if (e.getHorse() == null) continue;
+            BigDecimal thisRating = e.getHorse().getCurrentScore() != null ? e.getHorse().getCurrentScore() : BigDecimal.ZERO;
+            BigDecimal handicap;
+            if (thisRating.compareTo(topRating) >= 0) {
+                short cls = e.getHorse().getHorseClass() != null ? e.getHorse().getHorseClass() : 5;
+                handicap = resolveTopWeight(cls);
+            } else {
+                BigDecimal diff = topRating.subtract(thisRating);
+                handicap = topWeightKg.subtract(diff.multiply(lbToKg)).setScale(1, RoundingMode.HALF_UP);
+                handicap = handicap.max(minWeightKg);
+            }
+            e.setHandicapWeight(handicap);
+        }
+        raceEntryRepository.saveAll(entries);
+    }
+
+    private BigDecimal resolveTopWeight(short horseClass) {
+        switch (horseClass) {
+            case 1: return new BigDecimal("60.3");
+            case 2: return new BigDecimal("57.2");
+            case 3: return new BigDecimal("55.8");
+            case 4: return new BigDecimal("53.5");
+            default: return new BigDecimal("51.3");
+        }
     }
 }

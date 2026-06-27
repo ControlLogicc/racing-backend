@@ -89,4 +89,12 @@ public class RaceEntry {
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();
     }
+
+    public BigDecimal getActualWeight() {
+        return jockeyActualWeight;
+    }
+
+    public void setActualWeight(BigDecimal actualWeight) {
+        this.jockeyActualWeight = actualWeight;
+    }
 }

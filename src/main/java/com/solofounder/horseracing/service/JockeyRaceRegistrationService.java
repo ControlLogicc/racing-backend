@@ -167,6 +167,7 @@ public class JockeyRaceRegistrationService {
                 .jockeyRaceRegistrationId(registration.getJockeyRaceRegistrationId())
                 .raceId(race.getRaceId())
                 .raceName(race.getRaceName())
+                .scheduledTime(race.getScheduledTime())
                 .jockeyId(jockey.getJockeyId())
                 .jockeyName(jockey.getUser().getFullName())
                 .jockeyStatus(jockey.getStatus())

@@ -27,7 +27,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(AbstractHttpConfigurer::disable)
+                .cors(org.springframework.security.config.Customizer.withDefaults())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/auth/**",
@@ -46,13 +46,15 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers("/api/owner/**").hasRole("OWNER")
                         .requestMatchers("/api/jockey/**").hasRole("JOCKEY")
-                        .requestMatchers(HttpMethod.GET, "/api/staff").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers(HttpMethod.GET, "/api/staff", "/api/staff/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers(HttpMethod.POST, "/api/staff").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/staff/horses/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers(HttpMethod.PUT, "/api/staff/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/admin/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/admin/races/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers(HttpMethod.POST, "/api/admin/races/*/recalculate-prizes").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/race-management/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/race-management/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/referees/**").authenticated()
                         .requestMatchers("/api/registrations/**").authenticated()

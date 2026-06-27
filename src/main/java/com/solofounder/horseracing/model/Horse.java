@@ -64,6 +64,10 @@ public class Horse {
     @Column(name = "claimed_class")
     private Short claimedClass;
 
+    /** Evidence link provided by Owner for PREVIOUSLY_REGISTERED horses */
+    @Column(name = "evidence_link", length = 500)
+    private String evidenceLink;
+
     /** true = rating accepted (auto for NEW, requires Staff approval for PREVIOUSLY_REGISTERED) */
     @Column(name = "rating_verified", nullable = false)
     private boolean ratingVerified;

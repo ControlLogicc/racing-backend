@@ -112,6 +112,10 @@ public class AuthService {
     }
 
     public User adminCreateUser(CreateInternalUserRequest request) {
+        if (request.getRole() == Role.OWNER || request.getRole() == Role.JOCKEY || request.getRole() == Role.SPECTATOR) {
+            throw new IllegalArgumentException("Cannot create external roles internally");
+        }
+
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new IllegalStateException("Email already registered");
         }

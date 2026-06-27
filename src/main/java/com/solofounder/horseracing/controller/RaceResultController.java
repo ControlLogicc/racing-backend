@@ -7,12 +7,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 import java.util.List;
 
@@ -39,5 +36,22 @@ public class RaceResultController {
     @PreAuthorize("permitAll()")
     public ResponseEntity<List<RaceResultResponse>> getResultsByRace(@PathVariable Long raceId) {
         return ResponseEntity.ok(raceResultService.getResultsByRace(raceId));
+    }
+
+    @PutMapping("/{resultId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'REFEREE')")
+    public ResponseEntity<RaceResultResponse> updateResult(
+            @PathVariable Long resultId,
+            @RequestBody Map<String, Object> body) {
+        Integer position = body.get("position") != null ? ((Number) body.get("position")).intValue() : null;
+        String finishTime = (String) body.get("finishTime");
+        return ResponseEntity.ok(raceResultService.updateResult(resultId, position, finishTime));
+    }
+
+    @DeleteMapping("/{resultId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'REFEREE')")
+    public ResponseEntity<Void> deleteResult(@PathVariable Long resultId) {
+        raceResultService.deleteResult(resultId);
+        return ResponseEntity.noContent().build();
     }
 }

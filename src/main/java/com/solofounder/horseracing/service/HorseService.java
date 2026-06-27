@@ -31,7 +31,7 @@ import java.util.Set;
 public class HorseService {
 
     private static final Set<String> VALID_GENDERS = Set.of("M", "F");
-    private static final Set<String> VALID_STATUSES = Set.of("ACTIVE", "INJURED", "RETIRED", "SUSPENDED");
+    private static final Set<String> VALID_STATUSES = Set.of("ACTIVE", "INJURED", "RETIRED", "SUSPENDED", "FAIL");
 
     private final HorseRepository horseRepository;
     private final UserRepository userRepository;
@@ -66,11 +66,10 @@ public class HorseService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "claimedScore is required for PREVIOUSLY_REGISTERED horses");
             }
-            if (request.getClaimedClass() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "claimedClass is required for PREVIOUSLY_REGISTERED horses");
-            }
         }
+
+        BigDecimal initialScore = (regType == HorseRegistrationType.NEW) ? BigDecimal.valueOf(50) : BigDecimal.ZERO;
+        Short initialClass = (regType == HorseRegistrationType.NEW) ? calculateHorseClass(initialScore) : (short) 5;
 
         Horse horse = Horse.builder()
                 .owner(owner)
@@ -78,14 +77,15 @@ public class HorseService {
                 .color(normalizeRequired(request.getColor(), "Color is required"))
                 .age(validateAge(request.getAge()))
                 .gender(normalizeGender(request.getGender()))
-                .currentScore(BigDecimal.ZERO)
-                .horseClass((short) 5)
+                .currentScore(initialScore)
+                .horseClass(initialClass)
                 .totalWins(0)
                 .healthNote(trimToNull(request.getHealthNote()))
-                .status("active")
+                .status(regType == HorseRegistrationType.NEW ? "active" : "fail")
                 .registrationType(regType)
-                .claimedScore(regType == HorseRegistrationType.PREVIOUSLY_REGISTERED ? request.getClaimedScore() : null)
-                .claimedClass(regType == HorseRegistrationType.PREVIOUSLY_REGISTERED ? request.getClaimedClass() : null)
+                .claimedScore(regType == HorseRegistrationType.NEW ? BigDecimal.valueOf(50) : request.getClaimedScore())
+                .claimedClass(regType == HorseRegistrationType.NEW ? (short) 3 : calculateHorseClass(request.getClaimedScore()))
+                .evidenceLink(regType == HorseRegistrationType.PREVIOUSLY_REGISTERED ? request.getEvidenceLink() : null)
                 // NEW = auto-verified; PREVIOUSLY_REGISTERED = pending Staff review
                 .ratingVerified(regType == HorseRegistrationType.NEW)
                 .build();
@@ -105,7 +105,11 @@ public class HorseService {
         horse.setHealthNote(trimToNull(request.getHealthNote()));
         
         // Translate status uppercase value from request to lowercase value for database
-        horse.setStatus(normalizeHorseStatus(request.getStatus()));
+        if (!horse.isRatingVerified()) {
+            horse.setStatus("fail");
+        } else {
+            horse.setStatus(normalizeHorseStatus(request.getStatus()));
+        }
         
         return toResponse(horseRepository.save(horse));
     }
@@ -152,11 +156,16 @@ public class HorseService {
                     "approvedScore and approvedClass are required (no claimed values found)");
         }
 
+        horse.setClaimedScore(finalScore);
+        if (finalClass != null) {
+            horse.setClaimedClass(finalClass);
+        }
         horse.setCurrentScore(finalScore);
         horse.setHorseClass(finalClass);
         horse.setRatingVerified(true);
         horse.setRatingVerifiedBy(resolveStaffId(currentUser));
         horse.setRatingVerifiedAt(LocalDateTime.now());
+        horse.setStatus("active");
 
         return toResponse(horseRepository.save(horse));
     }
@@ -189,8 +198,21 @@ public class HorseService {
         // ratingVerified stays false — owner must re-submit claim
         horse.setRatingVerifiedBy(resolveStaffId(currentUser));
         horse.setRatingVerifiedAt(LocalDateTime.now());
+        horse.setStatus("fail");
 
         return toResponse(horseRepository.save(horse));
+    }
+
+    /**
+     * Returns all PREVIOUSLY_REGISTERED horses whose rating has NOT yet been verified.
+     * Intended for Staff to review and approve/reject owner-submitted ratings.
+     */
+    public List<HorseResponse> getPendingHorses() {
+        return horseRepository
+                .findByRegistrationTypeAndRatingVerifiedFalse(HorseRegistrationType.PREVIOUSLY_REGISTERED)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     public List<HorseResponse> getAllHorses() {
@@ -372,6 +394,7 @@ public class HorseService {
                         ? horse.getRegistrationType().name() : HorseRegistrationType.NEW.name())
                 .claimedScore(horse.getClaimedScore())
                 .claimedClass(horse.getClaimedClass())
+                .evidenceLink(horse.getEvidenceLink())
                 .ratingVerified(horse.isRatingVerified())
                 .ratingVerifiedAt(horse.getRatingVerifiedAt())
                 .build();

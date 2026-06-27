@@ -84,6 +84,9 @@ public class RaceEntryRandomizationIntegrationTests {
     @Autowired
     private RefereeReportRepository refereeReportRepository;
 
+    @Autowired
+    private RaceResultRepository raceResultRepository;
+
     private String staffToken;
     private String jockeyToken;
     private String adminToken;
@@ -93,6 +96,7 @@ public class RaceEntryRandomizationIntegrationTests {
     @BeforeEach
     void setupData() {
         refereeReportRepository.deleteAll();
+        raceResultRepository.deleteAll();
         raceEntryRepository.deleteAll();
         raceInvitationRepository.deleteAll();
         raceRegistrationRepository.deleteAll();

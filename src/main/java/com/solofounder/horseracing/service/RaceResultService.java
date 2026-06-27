@@ -240,7 +240,7 @@ public class RaceResultService {
     }
 
     private PrizeValues calculatePrizeValues(Long raceId, Short position, RaceResultStatus resultStatus) {
-        if (resultStatus == RaceResultStatus.DISQUALIFIED) {
+        if (resultStatus == RaceResultStatus.DISQUALIFIED || resultStatus == RaceResultStatus.PROVISIONAL) {
             return new PrizeValues(BigDecimal.ZERO, BigDecimal.ZERO);
         }
         return prizeStructureRepository.findByRaceRaceIdAndPosition(raceId, position)
@@ -256,6 +256,14 @@ public class RaceResultService {
         if (horse == null || horse.getHorseId() == null) {
             return;
         }
+        BigDecimal startingScore = horse.getClaimedScore();
+        if (startingScore == null) {
+            startingScore = BigDecimal.ZERO;
+        }
+        if (horse.getRegistrationType() == com.solofounder.horseracing.model.enums.HorseRegistrationType.PREVIOUSLY_REGISTERED && !horse.isRatingVerified()) {
+            startingScore = BigDecimal.ZERO;
+        }
+
         BigDecimal currentScore = raceResultRepository.sumScoreByHorseIdExcludingStatus(
                 horse.getHorseId(),
                 RaceResultStatus.DISQUALIFIED
@@ -263,6 +271,8 @@ public class RaceResultService {
         if (currentScore == null) {
             currentScore = BigDecimal.ZERO;
         }
+        currentScore = startingScore.add(currentScore);
+
         horse.setCurrentScore(currentScore);
         horse.setHorseClass(horseService.calculateHorseClass(currentScore));
         horse.setTotalWins((int) raceResultRepository.countWinsByHorseIdExcludingStatus(
@@ -305,6 +315,22 @@ public class RaceResultService {
                 .createdAt(result.getCreatedAt())
                 .updatedAt(result.getUpdatedAt())
                 .build();
+    }
+
+    public RaceResultResponse updateResult(Long resultId, Integer position, String finishTime) {
+        RaceResult result = raceResultRepository.findById(resultId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Result not found"));
+        requireRecorderRole(getCurrentUser());
+        if (position != null) result.setPosition(position.shortValue());
+        if (finishTime != null && !finishTime.isBlank()) result.setFinishTime(java.time.LocalTime.parse(finishTime));
+        return toResponse(raceResultRepository.save(result));
+    }
+
+    public void deleteResult(Long resultId) {
+        RaceResult result = raceResultRepository.findById(resultId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Result not found"));
+        requireRecorderRole(getCurrentUser());
+        raceResultRepository.delete(result);
     }
 
     private record PrizeValues(BigDecimal prizeAmount, BigDecimal scoreAwarded) {

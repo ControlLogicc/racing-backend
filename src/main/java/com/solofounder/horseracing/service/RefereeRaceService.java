@@ -25,11 +25,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.math.RoundingMode;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class RefereeRaceService {
+
+    private static final BigDecimal WEIGHT_TOLERANCE_KG = new BigDecimal("0.50");
 
     private final RefereeRepository refereeRepository;
     private final RaceRepository raceRepository;
@@ -82,7 +85,8 @@ public class RefereeRaceService {
         entry.setJockeyActualWeight(jockeyActualWeight);
         entry.setLeadWeight(leadWeight);
         entry.setCarriedWeight(carriedWeight);
-        entry.setWeightCheckStatus("PASSED");
+        String weightCheckStatus = calculateWeightCheckStatus(carriedWeight, handicapWeight);
+        entry.setWeightCheckStatus(weightCheckStatus);
         entry.setWeightCheckedBy(referee);
         entry.setWeightCheckedAt(LocalDateTime.now());
 
@@ -93,8 +97,13 @@ public class RefereeRaceService {
                 .jockeyActualWeight(jockeyActualWeight)
                 .leadWeight(leadWeight)
                 .carriedWeight(carriedWeight)
-                .weightCheckStatus("PASSED")
+                .weightCheckStatus(weightCheckStatus)
                 .build();
+    }
+
+    private String calculateWeightCheckStatus(BigDecimal carriedWeight, BigDecimal handicapWeight) {
+        BigDecimal diff = carriedWeight.subtract(handicapWeight).abs().setScale(2, RoundingMode.HALF_UP);
+        return diff.compareTo(WEIGHT_TOLERANCE_KG) <= 0 ? "PASSED" : "FAILED";
     }
 
     private Referee getCurrentReferee() {
@@ -130,6 +139,8 @@ public class RefereeRaceService {
                 .distanceMeters(race.getRaceCondition().getDistance())
                 .trackType(race.getRaceCondition().getTrackType())
                 .classRequirement(race.getRaceCondition().getClassRequirement())
+                .minEntries(race.getRaceCondition().getMinEntries())
+                .maxEntries(race.getRaceCondition().getMaxEntries())
                 .staffId(staff == null ? null : staff.getStaffId())
                 .staffName(staff == null ? null : staff.getUser().getFullName())
                 .refereeId(referee == null ? null : referee.getRefereeId())

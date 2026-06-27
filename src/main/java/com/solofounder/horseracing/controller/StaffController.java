@@ -63,6 +63,25 @@ public class StaffController {
     }
 
     /**
+     * List all PREVIOUSLY_REGISTERED horses waiting for Staff rating review.
+     * GET /api/staff/horses/pending
+     *
+     * Response fields of interest:
+     *   - horseId, horseName, ownerName
+     *   - registrationType  → always "PREVIOUSLY_REGISTERED"
+     *   - claimedScore      → Rating the Owner submitted (awaiting review)
+     *   - claimedClass      → Class the Owner submitted
+     *   - currentScore      → Current official score (still 0 until approved)
+     *   - status            → "FAIL" while pending, "ACTIVE" once approved
+     *   - ratingVerified    → false while pending
+     */
+    @GetMapping("/horses/pending")
+    @PreAuthorize("hasAnyRole('STAFF', 'ADMIN')")
+    public ResponseEntity<List<HorseResponse>> getPendingHorses() {
+        return ResponseEntity.ok(horseService.getPendingHorses());
+    }
+
+    /**
      * Verify (approve) rating of a PREVIOUSLY_REGISTERED horse.
      * Staff can optionally override the Owner's claimed score/class.
      * PUT /api/staff/horses/{horseId}/verify-rating
