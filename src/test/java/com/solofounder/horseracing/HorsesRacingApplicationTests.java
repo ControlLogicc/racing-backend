@@ -129,9 +129,6 @@ class HorsesRacingApplicationTests {
         @Autowired
         private com.solofounder.horseracing.repository.RefereeReportRepository refereeReportRepository;
 
-        @Autowired
-        private com.solofounder.horseracing.repository.RaceEntryRepository raceEntryRepository;
-
         private static final java.util.Set<Long> preExistingUserIds = new java.util.HashSet<>();
 
         @BeforeEach
@@ -682,8 +679,8 @@ class HorsesRacingApplicationTests {
                 assertEquals("M", response.getGender());
                 assertEquals("ACTIVE", response.getStatus()); // Default: ACTIVE
                 assertEquals("Healthy", response.getHealthNote());
-                assertEquals(0, BigDecimal.ZERO.compareTo(response.getCurrentScore())); // Default: 0
-                assertEquals((short) 5, response.getHorseClass()); // Default: 5
+                assertEquals(0, BigDecimal.valueOf(50).compareTo(response.getCurrentScore())); // Default: 50
+                assertEquals((short) 3, response.getHorseClass()); // Default: 3
                 assertNotNull(response.getOwnerId());
         }
 
@@ -1061,8 +1058,8 @@ class HorsesRacingApplicationTests {
 
                 HorseResponse response = objectMapper.readValue(result.getResponse().getContentAsString(),
                                 HorseResponse.class);
-                assertEquals(0, BigDecimal.ZERO.compareTo(response.getCurrentScore())); // ignored, default 0
-                assertEquals((short) 5, response.getHorseClass()); // ignored, default 5
+                 assertEquals(0, BigDecimal.valueOf(50).compareTo(response.getCurrentScore())); // ignored, default 50
+                 assertEquals((short) 3, response.getHorseClass()); // ignored, default 3
         }
 
         // Test 9.2: Owner updates own horse and does not modify horseClass or
@@ -2727,6 +2724,142 @@ class HorsesRacingApplicationTests {
                                 .horseClass((short) 5)
                                 .status(status)
                                 .build());
+        }
+
+        @Test
+        void testPreviouslyRegisteredHorseFlow() throws Exception {
+                String ownerToken = getHorseOwnerTokenWithEmail("prevreg.owner@example.com");
+                User owner = userRepository.findByEmail("prevreg.owner@example.com").orElseThrow();
+                Staff staff = createStaff("prevreg.staff@example.com", "Prev Reg Staff", "PRSF01");
+
+                // 1. Create PREVIOUSLY_REGISTERED horse
+                CreateHorseRequest createRequest = CreateHorseRequest.builder()
+                                .horseName("Legacy Champion")
+                                .color("Dark Brown")
+                                .age((short) 6)
+                                .gender("M")
+                                .healthNote("Good condition")
+                                .registrationType("PREVIOUSLY_REGISTERED")
+                                .claimedScore(BigDecimal.valueOf(60))
+                                .build();
+
+                MvcResult createResult = mockMvc.perform(post("/api/owner/horses")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(createRequest)))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                HorseResponse created = objectMapper.readValue(createResult.getResponse().getContentAsString(),
+                                HorseResponse.class);
+
+                assertNotNull(created.getHorseId());
+                assertEquals("FAIL", created.getStatus());
+                assertFalse(created.isRatingVerified());
+                assertEquals(0, BigDecimal.ZERO.compareTo(created.getCurrentScore()));
+                assertEquals((short) 5, created.getHorseClass());
+                assertEquals(0, BigDecimal.valueOf(60).compareTo(created.getClaimedScore()));
+                assertEquals((short) 2, created.getClaimedClass());
+
+                // 2. Owner updates horse fields (tries to force status to ACTIVE)
+                UpdateHorseRequest updateRequest = UpdateHorseRequest.builder()
+                                .horseName("Legacy Champion Updated")
+                                .color("Brown")
+                                .age((short) 6)
+                                .gender("M")
+                                .healthNote("Perfect condition")
+                                .status("ACTIVE")
+                                .build();
+
+                MvcResult updateResult = mockMvc.perform(put("/api/owner/horses/" + created.getHorseId())
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(updateRequest)))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                HorseResponse updated = objectMapper.readValue(updateResult.getResponse().getContentAsString(),
+                                HorseResponse.class);
+                assertEquals("Legacy Champion Updated", updated.getHorseName());
+                assertEquals("FAIL", updated.getStatus()); // remains FAIL because rating is not verified
+
+                // 3. Staff verifies rating (approves with default claimed values)
+                MvcResult verifyResult = mockMvc.perform(put("/api/staff/horses/" + created.getHorseId() + "/verify-rating")
+                                .header("Authorization", getTokenFor(staff.getUser()))
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                HorseResponse verified = objectMapper.readValue(verifyResult.getResponse().getContentAsString(),
+                                HorseResponse.class);
+                assertTrue(verified.isRatingVerified());
+                assertEquals("ACTIVE", verified.getStatus()); // becomes ACTIVE
+                assertEquals(0, BigDecimal.valueOf(60).compareTo(verified.getCurrentScore()));
+                assertEquals((short) 2, verified.getHorseClass());
+
+                // 4. Owner updates status now that it is verified
+                UpdateHorseRequest finalUpdateRequest = UpdateHorseRequest.builder()
+                                .horseName("Legacy Champion Updated")
+                                .color("Brown")
+                                .age((short) 6)
+                                .gender("M")
+                                .healthNote("Injured during training")
+                                .status("INJURED")
+                                .build();
+
+                MvcResult finalUpdateResult = mockMvc.perform(put("/api/owner/horses/" + created.getHorseId())
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(finalUpdateRequest)))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                HorseResponse finalUpdated = objectMapper.readValue(finalUpdateResult.getResponse().getContentAsString(),
+                                HorseResponse.class);
+                assertEquals("INJURED", finalUpdated.getStatus()); // changes successfully
+        }
+
+        @Test
+        void testPreviouslyRegisteredHorseRejectionFlow() throws Exception {
+                String ownerToken = getHorseOwnerTokenWithEmail("prevreg.rej.owner@example.com");
+                Staff staff = createStaff("prevreg.rej.staff@example.com", "Prev Reg Rej Staff", "PRSF02");
+
+                // 1. Create PREVIOUSLY_REGISTERED horse
+                CreateHorseRequest createRequest = CreateHorseRequest.builder()
+                                .horseName("Legacy Loser")
+                                .color("Chestnut")
+                                .age((short) 7)
+                                .gender("F")
+                                .registrationType("PREVIOUSLY_REGISTERED")
+                                .claimedScore(BigDecimal.valueOf(45))
+                                .build();
+
+                MvcResult createResult = mockMvc.perform(post("/api/owner/horses")
+                                .header("Authorization", ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(createRequest)))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                HorseResponse created = objectMapper.readValue(createResult.getResponse().getContentAsString(),
+                                HorseResponse.class);
+
+                // 2. Staff rejects rating
+                MvcResult rejectResult = mockMvc.perform(put("/api/staff/horses/" + created.getHorseId() + "/reject-rating")
+                                .header("Authorization", getTokenFor(staff.getUser()))
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                HorseResponse rejected = objectMapper.readValue(rejectResult.getResponse().getContentAsString(),
+                                HorseResponse.class);
+
+                assertFalse(rejected.isRatingVerified());
+                assertEquals("FAIL", rejected.getStatus());
+                assertNull(rejected.getClaimedScore());
+                assertNull(rejected.getClaimedClass());
+                assertEquals(0, BigDecimal.ZERO.compareTo(rejected.getCurrentScore()));
+                assertEquals((short) 5, rejected.getHorseClass());
         }
 
         private String getTokenFor(User user) {

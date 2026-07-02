@@ -18,8 +18,10 @@ public class RaceEntryResponse {
     private String horseName;
     private Long jockeyId;
     private String jockeyName;
+    private Long confirmedByStaffId;
     private Short gateNumber;
     private BigDecimal handicapWeight;
+    private BigDecimal actualWeight;
     private BigDecimal jockeyActualWeight;
     private BigDecimal leadWeight;
     private BigDecimal carriedWeight;

@@ -20,6 +20,10 @@ public class RefereePreCheckRequest {
     @DecimalMin(value = "0.01", message = "Actual weight must be greater than 0")
     private BigDecimal actualWeight;
 
+    private BigDecimal leadWeight;
+
+    private BigDecimal carriedWeight;
+
     @Size(max = 500, message = "Note must be at most 500 characters")
     private String note;
 }

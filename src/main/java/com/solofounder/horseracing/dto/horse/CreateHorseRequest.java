@@ -46,9 +46,7 @@ public class CreateHorseRequest {
     @Schema(example = "35.0")
     private BigDecimal claimedScore;
 
-    /** Required when registrationType = PREVIOUSLY_REGISTERED (1–5) */
-    @Min(value = 1, message = "Claimed class must be between 1 and 5")
-    @Max(value = 5, message = "Claimed class must be between 1 and 5")
-    @Schema(example = "4", minimum = "1", maximum = "5")
-    private Short claimedClass;
+    /** Evidence link (Google Drive / OneDrive) for PREVIOUSLY_REGISTERED horses */
+    @Schema(example = "https://drive.google.com/...")
+    private String evidenceLink;
 }

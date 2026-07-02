@@ -36,6 +36,7 @@ public class HorseResponse {
 
     private BigDecimal claimedScore;
     private Short claimedClass;
+    private String evidenceLink;
 
     @Schema(description = "true = rating verified (auto for NEW, requires Staff for PREVIOUSLY_REGISTERED)")
     private boolean ratingVerified;

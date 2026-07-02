@@ -202,6 +202,8 @@ public class StaffService {
                 .distanceMeters(race.getRaceCondition().getDistance())
                 .trackType(race.getRaceCondition().getTrackType())
                 .classRequirement(race.getRaceCondition().getClassRequirement())
+                .minEntries(race.getRaceCondition().getMinEntries())
+                .maxEntries(race.getRaceCondition().getMaxEntries())
                 .staffId(staff == null ? null : staff.getStaffId())
                 .staffName(staff == null ? null : staff.getUser().getFullName())
                 .refereeId(referee == null ? null : referee.getRefereeId())

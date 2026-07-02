@@ -143,6 +143,8 @@ public class RefereeService {
                 .distanceMeters(condition != null ? condition.getDistance() : null)
                 .trackType(condition != null ? condition.getTrackType() : null)
                 .classRequirement(condition != null ? condition.getClassRequirement() : null)
+                .minEntries(condition != null ? condition.getMinEntries() : null)
+                .maxEntries(condition != null ? condition.getMaxEntries() : null)
                 .staffId(staff != null ? staff.getStaffId() : null)
                 .staffName(staff != null && staff.getUser() != null ? staff.getUser().getFullName() : null)
                 .refereeId(referee != null ? referee.getRefereeId() : null)

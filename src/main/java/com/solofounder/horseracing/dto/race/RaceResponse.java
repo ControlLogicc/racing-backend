@@ -29,6 +29,8 @@ public class RaceResponse {
     private Integer distanceMeters;
     private String trackType;
     private String classRequirement;
+    private Short minEntries;
+    private Short maxEntries;
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

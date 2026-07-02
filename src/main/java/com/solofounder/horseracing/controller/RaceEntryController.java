@@ -30,7 +30,7 @@ public class RaceEntryController {
     }
 
     @GetMapping("/race/{raceId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'OWNER', 'JOCKEY', 'REFEREE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'OWNER', 'JOCKEY', 'REFEREE', 'SPECTATOR')")
     public ResponseEntity<List<RaceEntryResponse>> getEntriesForRace(@PathVariable Long raceId) {
         return ResponseEntity.ok(raceEntryService.getEntriesForRace(raceId));
     }
