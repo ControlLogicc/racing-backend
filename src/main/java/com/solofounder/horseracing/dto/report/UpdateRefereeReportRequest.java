@@ -12,10 +12,14 @@ public class UpdateRefereeReportRequest {
     @NotBlank(message = "Report type is required")
     private String reportType;
 
-    @NotBlank(message = "Content is required")
     private String content;
 
     private String violations;
 
     private String decisions;
+
+    private String description;
+    private String decision;
+    private String penalty;
+    private String reportStatus;
 }

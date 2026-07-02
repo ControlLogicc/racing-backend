@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -18,8 +19,14 @@ public class HorseResponse {
     private String color;
     private Short age;
     private String gender;
+    private String breed;
+    private String pedigree;
+    private String trainerName;
+    private String stableName;
+    private String imageUrl;
+    private LocalDate dateOfBirth;
 
-    @Schema(example = "0")
+    @Schema(example = "50")
     private BigDecimal currentScore;
 
     @Schema(example = "5", minimum = "1", maximum = "5")

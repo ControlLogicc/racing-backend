@@ -31,12 +31,15 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/auth/**",
+                                "/uploads/images/**",
                                 "/referee-pre-check.html",
                                 "/error",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/uploads/images")
+                        .hasAnyRole("OWNER", "JOCKEY", "ADMIN", "STAFF")
                         .requestMatchers(HttpMethod.GET,
                                 "/api/races/**",
                                 "/api/results/**",

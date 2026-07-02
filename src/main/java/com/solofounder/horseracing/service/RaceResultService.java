@@ -31,6 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -65,8 +68,8 @@ public class RaceResultService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race entry not found"));
         Race race = entry.getRace();
 
-        if (!"PASSED".equalsIgnoreCase(entry.getEntryStatus())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only PASSED race entries can have a result");
+        if (!isResultEligibleEntry(entry)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only READY race entries can have a result");
         }
 
         if (!RECORDABLE_RACE_STATUSES.contains(race.getStatus())) {
@@ -87,10 +90,12 @@ public class RaceResultService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Position exceeds race entry count");
         }
         if (raceResultRepository.existsByRaceRaceIdAndPosition(race.getRaceId(), request.getPosition())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Race position already has a result");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race position already has a result");
         }
 
         RaceResultStatus resultStatus = parseResultStatus(request.getResultStatus());
+        validateFinishTimeOrder(race.getRaceId(), request.getPosition(), request.getFinishTime(),
+                resultStatus, null);
         PrizeValues prizeValues = calculatePrizeValues(race.getRaceId(), request.getPosition(), resultStatus);
 
         RaceResult result = RaceResult.builder()
@@ -129,7 +134,7 @@ public class RaceResultService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Duplicate entry in results");
             }
             if (!positions.add(item.getPosition())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Duplicate position in results");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate position in results");
             }
             if (item.getPosition() > entryCount) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Position exceeds race entry count");
@@ -141,15 +146,16 @@ public class RaceResultService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Entry does not belong to this race");
             }
             if (!isResultEligibleEntry(entry)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only PASSED race entries can have a result");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only READY race entries can have a result");
             }
             if (raceResultRepository.existsByEntryEntryId(entry.getEntryId())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Race entry already has a result");
             }
             if (raceResultRepository.existsByRaceRaceIdAndPosition(raceId, item.getPosition())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Race position already has a result");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race position already has a result");
             }
         }
+        validateBatchFinishTimeOrder(items);
 
         List<RaceResultResponse> responses = items.stream()
                 .map(item -> {
@@ -225,7 +231,7 @@ public class RaceResultService {
 
     private boolean isResultEligibleEntry(RaceEntry entry) {
         String status = entry.getEntryStatus();
-        return "PASSED".equalsIgnoreCase(status);
+        return "READY".equalsIgnoreCase(status) || "PASSED".equalsIgnoreCase(status);
     }
 
     private RaceResultStatus parseResultStatus(String status) {
@@ -321,9 +327,63 @@ public class RaceResultService {
         RaceResult result = raceResultRepository.findById(resultId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Result not found"));
         requireRecorderRole(getCurrentUser());
-        if (position != null) result.setPosition(position.shortValue());
-        if (finishTime != null && !finishTime.isBlank()) result.setFinishTime(java.time.LocalTime.parse(finishTime));
+        Short nextPosition = position != null ? position.shortValue() : result.getPosition();
+        boolean positionTaken = raceResultRepository.findByRaceRaceId(result.getRace().getRaceId()).stream()
+                .anyMatch(existing -> !existing.getResultId().equals(resultId)
+                        && existing.getPosition().equals(nextPosition));
+        if (positionTaken) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race position already has a result");
+        }
+        LocalTime nextFinishTime = finishTime != null && !finishTime.isBlank()
+                ? LocalTime.parse(finishTime)
+                : result.getFinishTime();
+        validateFinishTimeOrder(result.getRace().getRaceId(), nextPosition, nextFinishTime,
+                result.getResultStatus(), result.getResultId());
+        result.setPosition(nextPosition);
+        result.setFinishTime(nextFinishTime);
         return toResponse(raceResultRepository.save(result));
+    }
+
+    private void validateBatchFinishTimeOrder(List<CreateRaceResultRequest> items) {
+        List<CreateRaceResultRequest> timedResults = new ArrayList<>();
+        for (CreateRaceResultRequest item : items) {
+            if (item.getFinishTime() != null
+                    && parseResultStatus(item.getResultStatus()) != RaceResultStatus.DISQUALIFIED) {
+                timedResults.add(item);
+            }
+        }
+        timedResults.sort(Comparator.comparing(CreateRaceResultRequest::getPosition));
+        for (int i = 1; i < timedResults.size(); i++) {
+            CreateRaceResultRequest previous = timedResults.get(i - 1);
+            CreateRaceResultRequest current = timedResults.get(i);
+            if (current.getFinishTime().isBefore(previous.getFinishTime())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Finish time must not be faster than a higher-ranked position");
+            }
+        }
+    }
+
+    private void validateFinishTimeOrder(Long raceId, Short position, LocalTime finishTime,
+            RaceResultStatus status, Long excludedResultId) {
+        if (finishTime == null || status == RaceResultStatus.DISQUALIFIED) {
+            return;
+        }
+        for (RaceResult existing : raceResultRepository.findByRaceRaceId(raceId)) {
+            if (excludedResultId != null && excludedResultId.equals(existing.getResultId())) {
+                continue;
+            }
+            if (existing.getFinishTime() == null || existing.getResultStatus() == RaceResultStatus.DISQUALIFIED) {
+                continue;
+            }
+            if (existing.getPosition() < position && finishTime.isBefore(existing.getFinishTime())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Finish time must not be faster than a higher-ranked position");
+            }
+            if (existing.getPosition() > position && finishTime.isAfter(existing.getFinishTime())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Finish time must not be slower than a lower-ranked position");
+            }
+        }
     }
 
     public void deleteResult(Long resultId) {

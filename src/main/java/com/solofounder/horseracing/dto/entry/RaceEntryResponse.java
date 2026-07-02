@@ -16,6 +16,9 @@ public class RaceEntryResponse {
     private Long invitationId;
     private Long horseId;
     private String horseName;
+    private BigDecimal currentScore;
+    private Short horseClass;
+    private Boolean ratingVerified;
     private Long jockeyId;
     private String jockeyName;
     private Long confirmedByStaffId;

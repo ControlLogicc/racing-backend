@@ -28,6 +28,10 @@ public class RefereeReport {
     @JoinColumn(name = "referee_id", nullable = false)
     private Referee referee;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "entry_id")
+    private RaceEntry entry;
+
     @Column(name = "report_type", nullable = false, length = 25)
     @Convert(converter = RefereeReportTypeConverter.class)
     private RefereeReportType reportType;

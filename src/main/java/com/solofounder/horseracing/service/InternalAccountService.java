@@ -100,6 +100,12 @@ public class InternalAccountService {
                 .user(user)
                 .weight(validatePositiveWeight(request.getWeight()))
                 .experienceYears(validateExperienceYears(request.getExperienceYears()))
+                .height(validateHeight(request.getHeight()))
+                .nationality(trimToNull(request.getNationality()))
+                .licenseNumber(trimToNull(request.getLicenseNumber()))
+                .achievements(trimToNull(request.getAchievements()))
+                .imageUrl(trimToNull(request.getImageUrl()))
+                .dateOfBirth(request.getDateOfBirth())
                 .status(normalizeJockeyStatus(request.getStatus()))
                 .createdAt(LocalDateTime.now())
                 .build());
@@ -140,6 +146,13 @@ public class InternalAccountService {
             throw new IllegalArgumentException("Experience years must be greater than or equal to 0");
         }
         return experienceYears;
+    }
+
+    private BigDecimal validateHeight(BigDecimal height) {
+        if (height != null && height.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Height must be greater than 0");
+        }
+        return height;
     }
 
     private String normalizeStaffStatus(String status) {

@@ -311,13 +311,21 @@ public class RaceEntryRandomizationIntegrationTests {
         assertEquals(3, responses.length);
 
         Set<Short> gates = new HashSet<>();
+        Set<BigDecimal> handicapWeights = new HashSet<>();
         for (RaceEntryResponse r : responses) {
             assertNotNull(r.getGateNumber());
             assertTrue(r.getGateNumber() >= 1 && r.getGateNumber() <= 3);
+            assertNotNull(r.getCurrentScore());
+            assertNotNull(r.getHorseClass());
+            assertNotNull(r.getRatingVerified());
+            assertNotNull(r.getHandicapWeight());
             gates.add(r.getGateNumber());
+            handicapWeights.add(r.getHandicapWeight());
         }
         // Unique gates
         assertEquals(3, gates.size());
+        assertEquals(Set.of(new BigDecimal("61.2"), new BigDecimal("58.9"), new BigDecimal("56.7")),
+                handicapWeights);
 
         // Verify in DB
         List<RaceEntry> after = raceEntryRepository.findByRaceRaceId(testRace.getRaceId());
