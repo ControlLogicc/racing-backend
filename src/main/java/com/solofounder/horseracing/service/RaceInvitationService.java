@@ -300,6 +300,45 @@ public class RaceInvitationService {
         return toResponse(raceInvitationRepository.save(invitation));
     }
 
+    public InvitationResponse cancelInvitation(Long invitationId) {
+        User currentUser = getCurrentUser();
+        requireRole(currentUser, Role.OWNER);
+
+        RaceInvitation invitation = raceInvitationRepository.findById(invitationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found"));
+
+        RaceRegistration registration = invitation.getRaceRegistration();
+        if (registration == null || registration.getSubmittedBy() == null || !registration.getSubmittedBy().getUserId().equals(currentUser.getUserId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+
+        RaceInvitationStatus status = invitation.getInvitationStatus();
+        if (status == RaceInvitationStatus.DECLINED ||
+            status == RaceInvitationStatus.CANCELLED ||
+            status == RaceInvitationStatus.EXPIRED ||
+            status == RaceInvitationStatus.USED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation cannot be cancelled in its current status: " + status);
+        }
+
+        Race race = registration.getRace();
+        if (race == null || race.getStatus() == RaceStatus.CANCELLED ||
+            race.getStatus() == RaceStatus.RUNNING ||
+            race.getStatus() == RaceStatus.RESULT_PENDING ||
+            race.getStatus() == RaceStatus.OFFICIAL) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Race is not in valid status");
+        }
+
+        if (raceEntryRepository.existsByInvitationInvitationId(invitationId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot cancel invitation because a race entry has already been created");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        invitation.setInvitationStatus(RaceInvitationStatus.CANCELLED);
+        invitation.setRespondedAt(now);
+
+        return toResponse(raceInvitationRepository.save(invitation));
+    }
+
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getName() == null) {

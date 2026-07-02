@@ -2754,6 +2754,7 @@ class HorsesRacingApplicationTests {
                                 .healthNote("Good condition")
                                 .registrationType("PREVIOUSLY_REGISTERED")
                                 .claimedScore(BigDecimal.valueOf(60))
+                                .claimedClass((short) 2)
                                 .build();
 
                 MvcResult createResult = mockMvc.perform(post("/api/owner/horses")
@@ -2845,6 +2846,8 @@ class HorsesRacingApplicationTests {
                                 .gender("F")
                                 .registrationType("PREVIOUSLY_REGISTERED")
                                 .claimedScore(BigDecimal.valueOf(45))
+                                .claimedClass((short) 3)
+                                .healthNote("Rejected evidence")
                                 .build();
 
                 MvcResult createResult = mockMvc.perform(post("/api/owner/horses")

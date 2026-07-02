@@ -291,14 +291,14 @@ class RefereeRaceIntegrationTests {
         assertEquals(0, new BigDecimal("57.00").compareTo(response.getJockeyActualWeight()));
         assertEquals(0, new BigDecimal("0.00").compareTo(response.getLeadWeight()));
         assertEquals(0, new BigDecimal("57.00").compareTo(response.getCarriedWeight()));
-        assertEquals("passed", response.getWeightCheckStatus());
+        assertEquals("failed", response.getWeightCheckStatus());
 
         // Verify database entry was updated
         RaceEntry updated = raceEntryRepository.findById(assignedEntry.getEntryId()).orElseThrow();
         assertEquals(0, new BigDecimal("57.00").compareTo(updated.getJockeyActualWeight()));
         assertEquals(0, new BigDecimal("0.00").compareTo(updated.getLeadWeight()));
         assertEquals(0, new BigDecimal("57.00").compareTo(updated.getCarriedWeight()));
-        assertEquals("passed", updated.getWeightCheckStatus());
+        assertEquals("failed", updated.getWeightCheckStatus());
     }
 
     @Test

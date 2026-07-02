@@ -82,6 +82,9 @@ public class RaceEntryRandomizationIntegrationTests {
     private RaceEntryRepository raceEntryRepository;
 
     @Autowired
+    private JockeyRaceRegistrationRepository jockeyRaceRegistrationRepository;
+
+    @Autowired
     private RefereeReportRepository refereeReportRepository;
 
     @Autowired
@@ -99,6 +102,7 @@ public class RaceEntryRandomizationIntegrationTests {
         raceResultRepository.deleteAll();
         raceEntryRepository.deleteAll();
         raceInvitationRepository.deleteAll();
+        jockeyRaceRegistrationRepository.deleteAll();
         raceRegistrationRepository.deleteAll();
         raceRepository.deleteAll();
 

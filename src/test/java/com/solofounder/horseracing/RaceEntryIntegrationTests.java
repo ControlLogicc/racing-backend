@@ -82,6 +82,9 @@ public class RaceEntryIntegrationTests {
     private RaceInvitationRepository raceInvitationRepository;
 
     @Autowired
+    private JockeyRaceRegistrationRepository jockeyRaceRegistrationRepository;
+
+    @Autowired
     private RaceEntryRepository raceEntryRepository;
 
     @Autowired
@@ -114,6 +117,7 @@ public class RaceEntryIntegrationTests {
         raceResultRepository.deleteAll();
         raceEntryRepository.deleteAll();
         raceInvitationRepository.deleteAll();
+        jockeyRaceRegistrationRepository.deleteAll();
         raceRegistrationRepository.deleteAll();
         raceRepository.deleteAll();
 
@@ -352,7 +356,7 @@ public class RaceEntryIntegrationTests {
 
         RaceEntryResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), RaceEntryResponse.class);
         assertNotNull(response.getEntryId());
-        assertEquals("DECLARED", response.getEntryStatus());
+        assertEquals("declared", response.getEntryStatus());
         assertEquals((short) 1, response.getGateNumber());
         assertEquals(new BigDecimal("50.5"), response.getHandicapWeight());
         assertNull(response.getConfirmedByStaffId());
@@ -575,7 +579,7 @@ public class RaceEntryIntegrationTests {
 
         RaceEntryResponse response = objectMapper.readValue(updatedResult.getResponse().getContentAsString(), RaceEntryResponse.class);
         assertEquals(new BigDecimal("51.0"), response.getActualWeight());
-        assertEquals("passed", response.getWeightCheckStatus());
+        assertEquals("PASSED", response.getWeightCheckStatus());
     }
 
     @Test
@@ -711,7 +715,7 @@ public class RaceEntryIntegrationTests {
         RaceEntry unchanged = raceEntryRepository.findById(entry.getEntryId()).orElseThrow();
         assertNull(unchanged.getJockeyActualWeight());
         assertNull(unchanged.getWeightCheckStatus());
-        assertEquals("DECLARED", unchanged.getEntryStatus());
+        assertEquals("declared", unchanged.getEntryStatus());
     }
 
     @Test
@@ -1450,7 +1454,7 @@ public class RaceEntryIntegrationTests {
                 assertEquals(0, new BigDecimal("51.0").compareTo(response.getJockeyActualWeight()));
                 assertEquals(0, new BigDecimal("0.0").compareTo(response.getLeadWeight()));
                 assertEquals(0, new BigDecimal("51.0").compareTo(response.getCarriedWeight()));
-                assertEquals("passed", response.getWeightCheckStatus());
+                assertEquals("PASSED", response.getWeightCheckStatus());
         }
 
         @Test

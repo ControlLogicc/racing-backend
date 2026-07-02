@@ -46,4 +46,11 @@ public class RaceInvitationController {
             @PathVariable Long invitationId) {
         return ResponseEntity.ok(raceInvitationService.declineInvitation(invitationId));
     }
+
+    @PutMapping("/{invitationId}/cancel")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<InvitationResponse> cancelInvitation(
+            @PathVariable Long invitationId) {
+        return ResponseEntity.ok(raceInvitationService.cancelInvitation(invitationId));
+    }
 }
