@@ -57,6 +57,12 @@ public class JockeyService {
                 .user(user)
                 .weight(validateWeight(request.getWeight()))
                 .experienceYears(validateExperienceYears(request.getExperienceYears()))
+                .height(validateHeight(request.getHeight()))
+                .nationality(trimToNull(request.getNationality()))
+                .licenseNumber(trimToNull(request.getLicenseNumber()))
+                .achievements(trimToNull(request.getAchievements()))
+                .imageUrl(trimToNull(request.getImageUrl()))
+                .dateOfBirth(request.getDateOfBirth())
                 .status(normalizeJockeyStatus(request.getStatus()))
                 .build();
         return toResponse(jockeyRepository.save(jockey));
@@ -142,6 +148,12 @@ public class JockeyService {
     private void updateJockeyFields(Jockey jockey, UpdateJockeyRequest request) {
         jockey.setWeight(validateWeight(request.getWeight()));
         jockey.setExperienceYears(validateExperienceYears(request.getExperienceYears()));
+        jockey.setHeight(validateHeight(request.getHeight()));
+        jockey.setNationality(trimToNull(request.getNationality()));
+        jockey.setLicenseNumber(trimToNull(request.getLicenseNumber()));
+        jockey.setAchievements(trimToNull(request.getAchievements()));
+        jockey.setImageUrl(trimToNull(request.getImageUrl()));
+        jockey.setDateOfBirth(request.getDateOfBirth());
         jockey.setStatus(normalizeJockeyStatus(request.getStatus()));
     }
 
@@ -184,6 +196,13 @@ public class JockeyService {
         return experienceYears;
     }
 
+    private BigDecimal validateHeight(BigDecimal height) {
+        if (height != null && height.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Height must be greater than 0");
+        }
+        return height;
+    }
+
     private String normalizeJockeyStatus(String status) {
         String normalized = trimToNull(status);
         if (normalized == null) {
@@ -212,6 +231,12 @@ public class JockeyService {
                 .email(user.getEmail())
                 .weight(jockey.getWeight())
                 .experienceYears(jockey.getExperienceYears())
+                .height(jockey.getHeight())
+                .nationality(jockey.getNationality())
+                .licenseNumber(jockey.getLicenseNumber())
+                .achievements(jockey.getAchievements())
+                .imageUrl(jockey.getImageUrl())
+                .dateOfBirth(jockey.getDateOfBirth())
                 .status(jockey.getStatus())
                 .createdAt(jockey.getCreatedAt())
                 .build();

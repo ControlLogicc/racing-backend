@@ -11,6 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Data
 @Builder
@@ -40,6 +41,12 @@ public class CreateInternalAccountRequest {
 
     private BigDecimal weight;
     private Short experienceYears;
+    private BigDecimal height;
+    private String nationality;
+    private String achievements;
+    @Size(max = 2048, message = "Image URL must be at most 2048 characters")
+    private String imageUrl;
+    private LocalDate dateOfBirth;
 
     private String licenseNumber;
     private String licenseNo;

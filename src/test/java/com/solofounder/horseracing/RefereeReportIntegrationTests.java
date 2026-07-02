@@ -179,6 +179,18 @@ class RefereeReportIntegrationTests {
     }
 
     @Test
+    void reportEntryNotFoundReturns404() throws Exception {
+        CreateRefereeReportRequest request = validCreateRequest(assignedRace.getRaceId(), "VIOLATION");
+        request.setEntryId(999999999L);
+
+        mockMvc.perform(post("/api/reports")
+                        .header("Authorization", refereeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void invalidReportTypeReturns400() throws Exception {
         createReport(refereeToken, assignedRace.getRaceId(), "BAD_TYPE")
                 .andExpect(status().isBadRequest());
@@ -235,7 +247,7 @@ class RefereeReportIntegrationTests {
                 .reportType("DECISION")
                 .content("Final decision recorded")
                 .violations("")
-                .decisions("result_confirmed")
+                .decisions("no_action")
                 .build();
 
         MvcResult result = mockMvc.perform(put("/api/reports/" + created.getReportId())
@@ -257,7 +269,7 @@ class RefereeReportIntegrationTests {
         UpdateRefereeReportRequest request = UpdateRefereeReportRequest.builder()
                 .reportType("DECISION")
                 .content("Missing report update")
-                .decisions("result_confirmed")
+                .decisions("no_action")
                 .build();
 
         mockMvc.perform(put("/api/reports/999999999")
@@ -276,7 +288,7 @@ class RefereeReportIntegrationTests {
         UpdateRefereeReportRequest request = UpdateRefereeReportRequest.builder()
                 .reportType("DECISION")
                 .content("Other referee update")
-                .decisions("result_confirmed")
+                .decisions("no_action")
                 .build();
 
         mockMvc.perform(put("/api/reports/" + created.getReportId())
@@ -300,7 +312,7 @@ class RefereeReportIntegrationTests {
                 .reportType(reportType)
                 .content("Pre-race check completed")
                 .violations("")
-                .decisions("no_issue")
+                .decisions("no_action")
                 .build();
     }
 

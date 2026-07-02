@@ -25,6 +25,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -125,6 +126,12 @@ class InternalAccountIntegrationTests {
         CreateInternalAccountRequest request = baseRequest("new-jockey-" + suffix + TEST_DOMAIN, Role.JOCKEY)
                 .weight(new BigDecimal("52.50"))
                 .experienceYears((short) 3)
+                .height(new BigDecimal("165.50"))
+                .nationality("Vietnamese")
+                .licenseNumber("JOCKEY-LIC-" + suffix)
+                .achievements("Three regional wins")
+                .imageUrl("https://cdn.example.com/jockey.jpg")
+                .dateOfBirth(LocalDate.of(1998, 5, 20))
                 .status("available")
                 .build();
 
@@ -142,6 +149,12 @@ class InternalAccountIntegrationTests {
         assertEquals(request.getEmail(), response.getEmail());
         Jockey jockey = jockeyRepository.findById(response.getProfileId()).orElseThrow();
         assertEquals(0, new BigDecimal("52.50").compareTo(jockey.getWeight()));
+        assertEquals(0, new BigDecimal("165.50").compareTo(jockey.getHeight()));
+        assertEquals("Vietnamese", jockey.getNationality());
+        assertEquals("JOCKEY-LIC-" + suffix, jockey.getLicenseNumber());
+        assertEquals("Three regional wins", jockey.getAchievements());
+        assertEquals("https://cdn.example.com/jockey.jpg", jockey.getImageUrl());
+        assertEquals(LocalDate.of(1998, 5, 20), jockey.getDateOfBirth());
     }
 
     @Test

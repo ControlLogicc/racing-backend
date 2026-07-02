@@ -87,6 +87,7 @@ public class RefereeRaceService {
         entry.setCarriedWeight(carriedWeight);
         String weightCheckStatus = calculateWeightCheckStatus(carriedWeight, handicapWeight);
         entry.setWeightCheckStatus(weightCheckStatus);
+        entry.setEntryStatus("passed".equals(weightCheckStatus) ? "ready" : "scratched");
         entry.setWeightCheckedBy(referee);
         entry.setWeightCheckedAt(LocalDateTime.now());
 
@@ -103,7 +104,7 @@ public class RefereeRaceService {
 
     private String calculateWeightCheckStatus(BigDecimal carriedWeight, BigDecimal handicapWeight) {
         BigDecimal diff = carriedWeight.subtract(handicapWeight).abs().setScale(2, RoundingMode.HALF_UP);
-        return diff.compareTo(WEIGHT_TOLERANCE_KG) <= 0 ? "PASSED" : "FAILED";
+        return diff.compareTo(WEIGHT_TOLERANCE_KG) <= 0 ? "passed" : "failed";
     }
 
     private Referee getCurrentReferee() {
@@ -165,6 +166,9 @@ public class RefereeRaceService {
                 .invitationId(entry.getInvitation() != null ? entry.getInvitation().getInvitationId() : null)
                 .horseId(entry.getHorse().getHorseId())
                 .horseName(entry.getHorse().getHorseName())
+                .currentScore(entry.getHorse().getCurrentScore())
+                .horseClass(entry.getHorse().getHorseClass())
+                .ratingVerified(entry.getHorse().isRatingVerified())
                 .jockeyId(entry.getJockey().getJockeyId())
                 .jockeyName(entry.getJockey().getUser().getFullName())
                 .gateNumber(entry.getGateNumber())

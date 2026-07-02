@@ -66,6 +66,19 @@ public class HorseService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "claimedScore is required for PREVIOUSLY_REGISTERED horses");
             }
+            if (request.getClaimedClass() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "claimedClass is required for PREVIOUSLY_REGISTERED horses");
+            }
+        }
+
+        String evidenceLink = trimToNull(request.getEvidenceLink());
+        if (regType == HorseRegistrationType.PREVIOUSLY_REGISTERED && evidenceLink == null) {
+            evidenceLink = trimToNull(request.getHealthNote());
+        }
+        if (regType == HorseRegistrationType.PREVIOUSLY_REGISTERED && evidenceLink == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "evidenceLink or healthNote is required for PREVIOUSLY_REGISTERED horses");
         }
 
         BigDecimal initialScore = (regType == HorseRegistrationType.NEW) ? BigDecimal.valueOf(50) : BigDecimal.ZERO;
@@ -77,6 +90,12 @@ public class HorseService {
                 .color(normalizeRequired(request.getColor(), "Color is required"))
                 .age(validateAge(request.getAge()))
                 .gender(normalizeGender(request.getGender()))
+                .breed(trimToNull(request.getBreed()))
+                .pedigree(trimToNull(request.getPedigree()))
+                .trainerName(trimToNull(request.getTrainerName()))
+                .stableName(trimToNull(request.getStableName()))
+                .imageUrl(trimToNull(request.getImageUrl()))
+                .dateOfBirth(request.getDateOfBirth())
                 .currentScore(initialScore)
                 .horseClass(initialClass)
                 .totalWins(0)
@@ -84,8 +103,8 @@ public class HorseService {
                 .status(regType == HorseRegistrationType.NEW ? "active" : "fail")
                 .registrationType(regType)
                 .claimedScore(regType == HorseRegistrationType.NEW ? BigDecimal.valueOf(50) : request.getClaimedScore())
-                .claimedClass(regType == HorseRegistrationType.NEW ? (short) 3 : calculateHorseClass(request.getClaimedScore()))
-                .evidenceLink(regType == HorseRegistrationType.PREVIOUSLY_REGISTERED ? request.getEvidenceLink() : null)
+                .claimedClass(regType == HorseRegistrationType.NEW ? (short) 3 : request.getClaimedClass())
+                .evidenceLink(regType == HorseRegistrationType.PREVIOUSLY_REGISTERED ? evidenceLink : null)
                 // NEW = auto-verified; PREVIOUSLY_REGISTERED = pending Staff review
                 .ratingVerified(regType == HorseRegistrationType.NEW)
                 .build();
@@ -102,6 +121,7 @@ public class HorseService {
         horse.setColor(normalizeRequired(request.getColor(), "Color is required"));
         horse.setAge(validateAge(request.getAge()));
         horse.setGender(normalizeGender(request.getGender()));
+        updateHorseProfileFields(horse, request);
         horse.setHealthNote(trimToNull(request.getHealthNote()));
         
         // Translate status uppercase value from request to lowercase value for database
@@ -231,6 +251,7 @@ public class HorseService {
         horse.setColor(normalizeRequired(request.getColor(), "Color is required"));
         horse.setAge(validateAge(request.getAge()));
         horse.setGender(normalizeGender(request.getGender()));
+        updateHorseProfileFields(horse, request);
         horse.setHealthNote(trimToNull(request.getHealthNote()));
         horse.setStatus(normalizeHorseStatus(request.getStatus()));
         return toResponse(horseRepository.save(horse));
@@ -375,6 +396,15 @@ public class HorseService {
         return value.trim();
     }
 
+    private void updateHorseProfileFields(Horse horse, UpdateHorseRequest request) {
+        horse.setBreed(trimToNull(request.getBreed()));
+        horse.setPedigree(trimToNull(request.getPedigree()));
+        horse.setTrainerName(trimToNull(request.getTrainerName()));
+        horse.setStableName(trimToNull(request.getStableName()));
+        horse.setImageUrl(trimToNull(request.getImageUrl()));
+        horse.setDateOfBirth(request.getDateOfBirth());
+    }
+
     private HorseResponse toResponse(Horse horse) {
         User owner = horse.getOwner();
         return HorseResponse.builder()
@@ -385,6 +415,12 @@ public class HorseService {
                 .color(horse.getColor())
                 .age(horse.getAge())
                 .gender(horse.getGender())
+                .breed(horse.getBreed())
+                .pedigree(horse.getPedigree())
+                .trainerName(horse.getTrainerName())
+                .stableName(horse.getStableName())
+                .imageUrl(horse.getImageUrl())
+                .dateOfBirth(horse.getDateOfBirth())
                 .currentScore(horse.getCurrentScore())
                 .horseClass(horse.getHorseClass())
                 .totalWins(horse.getTotalWins())

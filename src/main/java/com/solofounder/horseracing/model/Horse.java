@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -36,13 +37,31 @@ public class Horse {
     @Column(name = "gender", length = 10)
     private String gender;
 
+    @Column(name = "breed", length = 100)
+    private String breed;
+
+    @Column(name = "pedigree", length = 1000)
+    private String pedigree;
+
+    @Column(name = "trainer_name", length = 150)
+    private String trainerName;
+
+    @Column(name = "stable_name", length = 150)
+    private String stableName;
+
+    @Column(name = "image_url", length = 2048)
+    private String imageUrl;
+
+    @Column(name = "date_of_birth")
+    private LocalDate dateOfBirth;
+
     @Column(name = "current_score", precision = 8, scale = 2)
     private BigDecimal currentScore;
 
     @Column(name = "horse_class")
     private Short horseClass;
 
-    @Column(name = "health_Note", length = 255)
+    @Column(name = "health_Note", length = 2048)
     private String healthNote;
 
     @Column(name = "status", nullable = false, length = 20)
@@ -65,7 +84,7 @@ public class Horse {
     private Short claimedClass;
 
     /** Evidence link provided by Owner for PREVIOUSLY_REGISTERED horses */
-    @Column(name = "evidence_link", length = 500)
+    @Column(name = "evidence_link", length = 2048)
     private String evidenceLink;
 
     /** true = rating accepted (auto for NEW, requires Staff approval for PREVIOUSLY_REGISTERED) */

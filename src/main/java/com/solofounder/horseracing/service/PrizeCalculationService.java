@@ -101,6 +101,36 @@ public class PrizeCalculationService {
                 .build();
     }
 
+    void recalculateAfterStandingsChange(Long raceId) {
+        List<RaceResult> results = raceResultRepository.findByRaceRaceId(raceId);
+        if (results == null || results.isEmpty()) {
+            return;
+        }
+        for (RaceResult result : results) {
+            if (result == null || result.getEntry() == null || result.getPosition() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid race result data");
+            }
+        }
+        int totalFinishers = (int) results.stream()
+                .filter(this::isPrizeEligible)
+                .count();
+        Set<Horse> affectedHorses = new HashSet<>();
+
+        for (RaceResult result : results) {
+            if (isPrizeEligible(result) && result.getResultStatus() != RaceResultStatus.PROVISIONAL) {
+                applyPrizeAndScore(raceId, totalFinishers, result);
+            } else {
+                result.setPrizeAmount(BigDecimal.ZERO);
+                result.setScoreAwarded(BigDecimal.ZERO);
+            }
+            if (result.getEntry() != null && result.getEntry().getHorse() != null) {
+                affectedHorses.add(result.getEntry().getHorse());
+            }
+        }
+        raceResultRepository.saveAll(results);
+        affectedHorses.forEach(this::recalculateHorseStats);
+    }
+
     private boolean isPrizeEligible(RaceResult result) {
         return result.getPosition() != null
                 && result.getPosition() > 0
@@ -124,6 +154,9 @@ public class PrizeCalculationService {
     }
 
     private void recalculateHorseStats(Horse horse) {
+        if (horse == null || horse.getHorseId() == null) {
+            return;
+        }
         BigDecimal startingScore = horse.getClaimedScore();
         if (startingScore == null) {
             startingScore = BigDecimal.ZERO;

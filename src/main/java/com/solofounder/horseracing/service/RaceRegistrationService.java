@@ -79,6 +79,15 @@ public class RaceRegistrationService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Horse is already registered for this race");
         }
 
+        if (raceRegistrationRepository.existsByRaceRaceIdAndSubmittedByUserId(
+                request.getRaceId(),
+                currentUser.getUserId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Owner already registered a horse for this race"
+            );
+        }
+
         // Satisfy class requirement check if present
         RaceCondition condition = race.getRaceCondition();
         if (condition != null && condition.getClassRequirement() != null && !condition.getClassRequirement().isBlank()) {

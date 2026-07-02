@@ -258,14 +258,14 @@ class RefereeRaceIntegrationTests {
         assertEquals(0, new BigDecimal("52.00").compareTo(response.getJockeyActualWeight()));
         assertEquals(0, new BigDecimal("3.00").compareTo(response.getLeadWeight()));
         assertEquals(0, new BigDecimal("55.00").compareTo(response.getCarriedWeight()));
-        assertEquals("PASSED", response.getWeightCheckStatus());
+        assertEquals("passed", response.getWeightCheckStatus());
 
         // Verify database entry was updated
         RaceEntry updated = raceEntryRepository.findById(assignedEntry.getEntryId()).orElseThrow();
         assertEquals(0, new BigDecimal("52.00").compareTo(updated.getJockeyActualWeight()));
         assertEquals(0, new BigDecimal("3.00").compareTo(updated.getLeadWeight()));
         assertEquals(0, new BigDecimal("55.00").compareTo(updated.getCarriedWeight()));
-        assertEquals("PASSED", updated.getWeightCheckStatus());
+        assertEquals("passed", updated.getWeightCheckStatus());
         assertEquals(assignedReferee.getRefereeId(), updated.getWeightCheckedBy().getRefereeId());
         assertTrue(updated.getWeightCheckedAt().isBefore(LocalDateTime.now().plusSeconds(5)));
     }
@@ -291,14 +291,14 @@ class RefereeRaceIntegrationTests {
         assertEquals(0, new BigDecimal("57.00").compareTo(response.getJockeyActualWeight()));
         assertEquals(0, new BigDecimal("0.00").compareTo(response.getLeadWeight()));
         assertEquals(0, new BigDecimal("57.00").compareTo(response.getCarriedWeight()));
-        assertEquals("PASSED", response.getWeightCheckStatus());
+        assertEquals("passed", response.getWeightCheckStatus());
 
         // Verify database entry was updated
         RaceEntry updated = raceEntryRepository.findById(assignedEntry.getEntryId()).orElseThrow();
         assertEquals(0, new BigDecimal("57.00").compareTo(updated.getJockeyActualWeight()));
         assertEquals(0, new BigDecimal("0.00").compareTo(updated.getLeadWeight()));
         assertEquals(0, new BigDecimal("57.00").compareTo(updated.getCarriedWeight()));
-        assertEquals("PASSED", updated.getWeightCheckStatus());
+        assertEquals("passed", updated.getWeightCheckStatus());
     }
 
     @Test
