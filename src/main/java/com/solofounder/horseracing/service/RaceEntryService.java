@@ -564,7 +564,10 @@ public class RaceEntryService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Carried weight and handicap weight are required for pre-check");
         }
-        BigDecimal diff = carriedWeight.subtract(handicapWeight).abs().setScale(2, RoundingMode.HALF_UP);
+        if (carriedWeight.compareTo(handicapWeight) >= 0) {
+            return WEIGHT_PASSED;
+        }
+        BigDecimal diff = handicapWeight.subtract(carriedWeight).setScale(2, RoundingMode.HALF_UP);
         return diff.compareTo(WEIGHT_TOLERANCE_KG) <= 0 ? WEIGHT_PASSED : WEIGHT_FAILED;
     }
 

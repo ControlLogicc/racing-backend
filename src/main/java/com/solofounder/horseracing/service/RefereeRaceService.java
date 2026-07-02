@@ -103,7 +103,10 @@ public class RefereeRaceService {
     }
 
     private String calculateWeightCheckStatus(BigDecimal carriedWeight, BigDecimal handicapWeight) {
-        BigDecimal diff = carriedWeight.subtract(handicapWeight).abs().setScale(2, RoundingMode.HALF_UP);
+        if (carriedWeight.compareTo(handicapWeight) >= 0) {
+            return "passed";
+        }
+        BigDecimal diff = handicapWeight.subtract(carriedWeight).setScale(2, RoundingMode.HALF_UP);
         return diff.compareTo(WEIGHT_TOLERANCE_KG) <= 0 ? "passed" : "failed";
     }
 
