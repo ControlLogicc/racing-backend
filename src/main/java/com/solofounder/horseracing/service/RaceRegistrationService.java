@@ -228,6 +228,47 @@ public class RaceRegistrationService {
         return toResponse(raceRegistrationRepository.save(registration));
     }
 
+    public RegistrationResponse withdrawRegistration(Long registrationId) {
+        User currentUser = getCurrentUser();
+        requireRole(currentUser, Role.OWNER);
+
+        RaceRegistration registration = raceRegistrationRepository.findById(registrationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Registration not found"));
+
+        if (registration.getSubmittedBy() == null || !registration.getSubmittedBy().getUserId().equals(currentUser.getUserId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+
+        if (registration.getStatus() != RaceRegistrationStatus.PENDING && registration.getStatus() != RaceRegistrationStatus.APPROVED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Registration cannot be withdrawn in its current status: " + registration.getStatus());
+        }
+
+        Race race = registration.getRace();
+        RaceStatus raceStatus = race.getStatus();
+        if (raceStatus == RaceStatus.RUNNING || raceStatus == RaceStatus.RESULT_PENDING || raceStatus == RaceStatus.OFFICIAL || raceStatus == RaceStatus.CANCELLED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot withdraw registration when the race has already started, completed, or been cancelled");
+        }
+
+        if (raceEntryRepository.existsByRegistrationRegistrationId(registrationId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot withdraw registration when a race entry has already been created");
+        }
+
+        List<RaceInvitation> invitations = raceInvitationRepository.findByRaceRegistrationRegistrationId(registrationId);
+        for (RaceInvitation invitation : invitations) {
+            if (invitation.getInvitationStatus() == RaceInvitationStatus.SENT ||
+                invitation.getInvitationStatus() == RaceInvitationStatus.PENDING_RESPONSE ||
+                invitation.getInvitationStatus() == RaceInvitationStatus.ACCEPTED) {
+                invitation.setInvitationStatus(RaceInvitationStatus.CANCELLED);
+                raceInvitationRepository.save(invitation);
+            }
+        }
+
+        registration.setStatus(RaceRegistrationStatus.WITHDRAWN);
+        registration.setReviewedAt(LocalDateTime.now());
+
+        return toResponse(raceRegistrationRepository.save(registration));
+    }
+
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getName() == null) {

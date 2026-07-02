@@ -32,6 +32,8 @@ public interface RaceInvitationRepository extends JpaRepository<RaceInvitation, 
 
     Optional<RaceInvitation> findTopByRaceRegistrationRegistrationIdOrderByCreatedAtDesc(Long registrationId);
 
+    List<RaceInvitation> findByRaceRegistrationRegistrationId(Long registrationId);
+
     List<RaceInvitation> findByRaceRegistrationHorseOwnerUserId(Long userId);
 
     List<RaceInvitation> findByRaceRegistrationHorseOwnerUserIdAndInvitationStatus(

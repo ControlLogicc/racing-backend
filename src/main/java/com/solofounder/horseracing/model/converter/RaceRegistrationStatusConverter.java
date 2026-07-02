@@ -19,6 +19,8 @@ public class RaceRegistrationStatusConverter implements AttributeConverter<RaceR
                 return "approved";
             case REJECTED:
                 return "rejected";
+            case WITHDRAWN:
+                return "withdrawn";
             default:
                 throw new IllegalArgumentException("Unknown RaceRegistrationStatus: " + status);
         }
@@ -40,8 +42,9 @@ public class RaceRegistrationStatusConverter implements AttributeConverter<RaceR
             case "converted_to_entry":
                 return RaceRegistrationStatus.APPROVED;
             case "rejected":
-            case "withdrawn":
                 return RaceRegistrationStatus.REJECTED;
+            case "withdrawn":
+                return RaceRegistrationStatus.WITHDRAWN;
             default:
                 throw new IllegalArgumentException("Unknown database value for RaceRegistrationStatus: " + dbData);
         }

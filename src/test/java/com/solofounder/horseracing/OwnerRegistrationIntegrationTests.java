@@ -215,6 +215,63 @@ class OwnerRegistrationIntegrationTests {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void testOwnerWithdrawPendingRegistrationSuccess() throws Exception {
+        RaceRegistration reg = createRegistration(owner, RaceRegistrationStatus.PENDING, "Pending Withdraw Horse");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/registrations/" + reg.getRegistrationId() + "/withdraw")
+                        .header("Authorization", ownerToken))
+                .andExpect(status().isOk());
+
+        RaceRegistration updated = raceRegistrationRepository.findById(reg.getRegistrationId()).orElseThrow();
+        assertEquals(RaceRegistrationStatus.WITHDRAWN, updated.getStatus());
+    }
+
+    @Test
+    void testOwnerWithdrawApprovedRegistrationSuccessAndCancelsInvitations() throws Exception {
+        RaceRegistration reg = createRegistration(owner, RaceRegistrationStatus.APPROVED, "Approved Withdraw Horse");
+        RaceInvitation invitation = createInvitation(reg, RaceInvitationStatus.SENT);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/registrations/" + reg.getRegistrationId() + "/withdraw")
+                        .header("Authorization", ownerToken))
+                .andExpect(status().isOk());
+
+        RaceRegistration updated = raceRegistrationRepository.findById(reg.getRegistrationId()).orElseThrow();
+        assertEquals(RaceRegistrationStatus.WITHDRAWN, updated.getStatus());
+
+        RaceInvitation updatedInvitation = raceInvitationRepository.findById(invitation.getInvitationId()).orElseThrow();
+        assertEquals(RaceInvitationStatus.CANCELLED, updatedInvitation.getInvitationStatus());
+    }
+
+    @Test
+    void testWithdrawRegistrationWrongOwnerForbidden() throws Exception {
+        RaceRegistration reg = createRegistration(owner, RaceRegistrationStatus.PENDING, "Other Owner Withdraw Horse");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/registrations/" + reg.getRegistrationId() + "/withdraw")
+                        .header("Authorization", otherOwnerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void testWithdrawRegistrationWithRaceEntryFails() throws Exception {
+        RaceRegistration reg = createRegistration(owner, RaceRegistrationStatus.APPROVED, "Withdraw with Entry Horse");
+        RaceInvitation invitation = createInvitation(reg, RaceInvitationStatus.USED);
+        raceEntryRepository.save(RaceEntry.builder()
+                .race(race)
+                .registration(reg)
+                .invitation(invitation)
+                .horse(reg.getHorse())
+                .jockey(jockey)
+                .gateNumber((short) 2)
+                .handicapWeight(new BigDecimal("55.00"))
+                .entryStatus("declared")
+                .build());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/registrations/" + reg.getRegistrationId() + "/withdraw")
+                        .header("Authorization", ownerToken))
+                .andExpect(status().isBadRequest());
+    }
+
     private ApprovedRegistrationForInvitationResponse[] performApprovedRegistrations(String token) throws Exception {
         MvcResult result = mockMvc.perform(get("/api/owner/registrations/approved")
                         .header("Authorization", token))
