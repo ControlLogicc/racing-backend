@@ -575,7 +575,7 @@ public class RaceEntryIntegrationTests {
 
         RaceEntryResponse response = objectMapper.readValue(updatedResult.getResponse().getContentAsString(), RaceEntryResponse.class);
         assertEquals(new BigDecimal("51.0"), response.getActualWeight());
-        assertEquals("PASSED", response.getWeightCheckStatus());
+        assertEquals("passed", response.getWeightCheckStatus());
     }
 
     @Test
@@ -615,12 +615,12 @@ public class RaceEntryIntegrationTests {
         RaceEntry refreshedEntry2 = raceEntryRepository.findById(entry2.getEntryId()).orElseThrow();
         assertEquals(0, new BigDecimal("55.00").compareTo(refreshedEntry1.getHandicapWeight()));
         assertEquals(0, new BigDecimal("55.20").compareTo(refreshedEntry1.getActualWeight()));
-        assertEquals("PASSED", refreshedEntry1.getWeightCheckStatus());
-        assertEquals("PASSED", refreshedEntry1.getEntryStatus());
+        assertEquals("passed", refreshedEntry1.getWeightCheckStatus());
+        assertEquals("ready", refreshedEntry1.getEntryStatus());
         assertEquals(0, new BigDecimal("55.00").compareTo(refreshedEntry2.getHandicapWeight()));
         assertEquals(0, new BigDecimal("58.50").compareTo(refreshedEntry2.getActualWeight()));
-        assertEquals("FAILED", refreshedEntry2.getWeightCheckStatus());
-        assertEquals("FAILED", refreshedEntry2.getEntryStatus());
+        assertEquals("failed", refreshedEntry2.getWeightCheckStatus());
+        assertEquals("scratched", refreshedEntry2.getEntryStatus());
     }
 
     @Test
@@ -682,6 +682,36 @@ public class RaceEntryIntegrationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testBatchWeightCheckDuplicateEntryReturns400AndRollsBack() throws Exception {
+        RaceEntry entry = saveDeclaredEntry(approvedReg1, acceptedInv1, horse1, jockeyProfile1, (short) 1);
+        BatchWeightCheckRequest request = BatchWeightCheckRequest.builder()
+                .handicapWeight(new BigDecimal("55.00"))
+                .checks(List.of(
+                        WeightCheckItemRequest.builder()
+                                .entryId(entry.getEntryId())
+                                .actualWeight(new BigDecimal("55.10"))
+                                .passed(true)
+                                .build(),
+                        WeightCheckItemRequest.builder()
+                                .entryId(entry.getEntryId())
+                                .actualWeight(new BigDecimal("55.20"))
+                                .passed(true)
+                                .build()))
+                .build();
+
+        mockMvc.perform(put("/api/entries/race/" + testRace.getRaceId() + "/weight-check")
+                        .header("Authorization", staffToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        RaceEntry unchanged = raceEntryRepository.findById(entry.getEntryId()).orElseThrow();
+        assertNull(unchanged.getJockeyActualWeight());
+        assertNull(unchanged.getWeightCheckStatus());
+        assertEquals("DECLARED", unchanged.getEntryStatus());
     }
 
     @Test

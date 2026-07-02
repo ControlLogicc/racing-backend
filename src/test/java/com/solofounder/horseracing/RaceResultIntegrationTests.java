@@ -282,12 +282,31 @@ class RaceResultIntegrationTests {
     }
 
     @Test
-    void duplicatePositionReturns409() throws Exception {
+    void duplicatePositionReturns400() throws Exception {
         postResult(adminToken, entries.get(0).getEntryId(), (short) 1, null)
                 .andExpect(status().isOk());
 
         postResult(adminToken, entries.get(1).getEntryId(), (short) 1, null)
-                .andExpect(status().isConflict());
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void lowerRankCannotHaveFasterFinishTime() throws Exception {
+        CreateRaceResultRequest first = validRequest(entries.get(0).getEntryId(), (short) 2, null);
+        first.setFinishTime(LocalTime.of(0, 3, 30));
+        mockMvc.perform(post("/api/results")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(first)))
+                .andExpect(status().isOk());
+
+        CreateRaceResultRequest lowerRank = validRequest(entries.get(1).getEntryId(), (short) 3, null);
+        lowerRank.setFinishTime(LocalTime.of(0, 3, 20));
+        mockMvc.perform(post("/api/results")
+                        .header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(lowerRank)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

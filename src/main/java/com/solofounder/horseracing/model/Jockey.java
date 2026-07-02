@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -28,6 +29,24 @@ public class Jockey {
 
     @Column(name = "experience_years")
     private Short experienceYears;
+
+    @Column(name = "height", precision = 5, scale = 2)
+    private BigDecimal height;
+
+    @Column(name = "nationality", length = 100)
+    private String nationality;
+
+    @Column(name = "license_number", length = 100)
+    private String licenseNumber;
+
+    @Column(name = "achievements", columnDefinition = "NVARCHAR(MAX)")
+    private String achievements;
+
+    @Column(name = "image_url", length = 2048)
+    private String imageUrl;
+
+    @Column(name = "date_of_birth")
+    private LocalDate dateOfBirth;
 
     @Column(name = "status", nullable = false, length = 20)
     private String status;

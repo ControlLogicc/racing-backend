@@ -3,6 +3,7 @@ package com.solofounder.horseracing.dto.horse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 import lombok.*;
+import java.time.LocalDate;
 
 @Data
 @Builder
@@ -29,7 +30,17 @@ public class UpdateHorseRequest {
     @Schema(example = "M", allowableValues = {"M", "F"})
     private String gender;
 
+    private String breed;
+    @Size(max = 1000, message = "Pedigree must be at most 1000 characters")
+    private String pedigree;
+    private String trainerName;
+    private String stableName;
+    @Size(max = 2048, message = "Image URL must be at most 2048 characters")
+    private String imageUrl;
+    private LocalDate dateOfBirth;
+
     @Schema(example = "Healthy")
+    @Size(max = 2048, message = "Health note must be at most 2048 characters")
     private String healthNote;
 
     @NotBlank(message = "Status is required")

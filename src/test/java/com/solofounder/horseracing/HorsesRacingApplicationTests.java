@@ -46,6 +46,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -660,6 +661,12 @@ class HorsesRacingApplicationTests {
                                 .color("Brown")
                                 .age((short) 4)
                                 .gender("M")
+                                .breed("Thoroughbred")
+                                .pedigree("Sire A x Dam B")
+                                .trainerName("Trainer One")
+                                .stableName("Stable One")
+                                .imageUrl("https://cdn.example.com/horse.jpg")
+                                .dateOfBirth(LocalDate.of(2022, 2, 10))
                                 .healthNote("Healthy")
                                 .build();
 
@@ -677,6 +684,12 @@ class HorsesRacingApplicationTests {
                 assertEquals("Brown", response.getColor());
                 assertEquals((short) 4, response.getAge());
                 assertEquals("M", response.getGender());
+                assertEquals("Thoroughbred", response.getBreed());
+                assertEquals("Sire A x Dam B", response.getPedigree());
+                assertEquals("Trainer One", response.getTrainerName());
+                assertEquals("Stable One", response.getStableName());
+                assertEquals("https://cdn.example.com/horse.jpg", response.getImageUrl());
+                assertEquals(LocalDate.of(2022, 2, 10), response.getDateOfBirth());
                 assertEquals("ACTIVE", response.getStatus()); // Default: ACTIVE
                 assertEquals("Healthy", response.getHealthNote());
                 assertEquals(0, BigDecimal.valueOf(50).compareTo(response.getCurrentScore())); // Default: 50

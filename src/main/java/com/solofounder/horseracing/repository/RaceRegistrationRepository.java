@@ -12,6 +12,7 @@ public interface RaceRegistrationRepository extends JpaRepository<RaceRegistrati
     List<RaceRegistration> findByRaceStaffStaffId(Long staffId);
     List<RaceRegistration> findBySubmittedByUserId(Long userId);
     boolean existsByRaceRaceIdAndHorseHorseId(Long raceId, Long horseId);
+    boolean existsByRaceRaceIdAndSubmittedByUserId(Long raceId, Long ownerId);
     long countByRaceRaceIdAndStatus(Long raceId, RaceRegistrationStatus status);
 
     @Query("""
