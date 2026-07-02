@@ -35,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
@@ -96,10 +97,10 @@ class RaceRegistrationOwnerLimitTests {
     void sameOwnerSameRaceDifferentHorseReturns400() {
         Horse secondHorse = horse(302L, owner, "Second Horse");
         when(horseRepository.findById(secondHorse.getHorseId())).thenReturn(Optional.of(secondHorse));
-        when(raceRegistrationRepository.existsByRaceRaceIdAndHorseHorseId(
-                race.getRaceId(), secondHorse.getHorseId())).thenReturn(false);
-        when(raceRegistrationRepository.existsByRaceRaceIdAndSubmittedByUserId(
-                race.getRaceId(), owner.getUserId())).thenReturn(true);
+        when(raceRegistrationRepository.existsByRaceRaceIdAndHorseHorseIdAndStatusIn(
+                eq(race.getRaceId()), eq(secondHorse.getHorseId()), any())).thenReturn(false);
+        when(raceRegistrationRepository.existsByRaceRaceIdAndSubmittedByUserIdAndStatusIn(
+                eq(race.getRaceId()), eq(owner.getUserId()), any())).thenReturn(true);
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -144,8 +145,8 @@ class RaceRegistrationOwnerLimitTests {
     void sameHorseSameRaceDuplicateStillReturnsConflict() {
         Horse firstHorse = horse(301L, owner, "First Horse");
         when(horseRepository.findById(firstHorse.getHorseId())).thenReturn(Optional.of(firstHorse));
-        when(raceRegistrationRepository.existsByRaceRaceIdAndHorseHorseId(
-                race.getRaceId(), firstHorse.getHorseId())).thenReturn(true);
+        when(raceRegistrationRepository.existsByRaceRaceIdAndHorseHorseIdAndStatusIn(
+                eq(race.getRaceId()), eq(firstHorse.getHorseId()), any())).thenReturn(true);
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -160,10 +161,10 @@ class RaceRegistrationOwnerLimitTests {
     private void allowRegistration(Race targetRace, Horse horse, User targetOwner) {
         when(raceRepository.findById(targetRace.getRaceId())).thenReturn(Optional.of(targetRace));
         when(horseRepository.findById(horse.getHorseId())).thenReturn(Optional.of(horse));
-        when(raceRegistrationRepository.existsByRaceRaceIdAndHorseHorseId(
-                targetRace.getRaceId(), horse.getHorseId())).thenReturn(false);
-        when(raceRegistrationRepository.existsByRaceRaceIdAndSubmittedByUserId(
-                targetRace.getRaceId(), targetOwner.getUserId())).thenReturn(false);
+        when(raceRegistrationRepository.existsByRaceRaceIdAndHorseHorseIdAndStatusIn(
+                eq(targetRace.getRaceId()), eq(horse.getHorseId()), any())).thenReturn(false);
+        when(raceRegistrationRepository.existsByRaceRaceIdAndSubmittedByUserIdAndStatusIn(
+                eq(targetRace.getRaceId()), eq(targetOwner.getUserId()), any())).thenReturn(false);
         when(raceRegistrationRepository.save(any(RaceRegistration.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
     }

@@ -75,13 +75,16 @@ public class RaceRegistrationService {
         }
 
         // Duplicate registration check
-        if (raceRegistrationRepository.existsByRaceRaceIdAndHorseHorseId(request.getRaceId(), request.getHorseId())) {
+        List<RaceRegistrationStatus> activeStatuses = List.of(RaceRegistrationStatus.PENDING, RaceRegistrationStatus.APPROVED);
+
+        if (raceRegistrationRepository.existsByRaceRaceIdAndHorseHorseIdAndStatusIn(request.getRaceId(), request.getHorseId(), activeStatuses)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Horse is already registered for this race");
         }
 
-        if (raceRegistrationRepository.existsByRaceRaceIdAndSubmittedByUserId(
+        if (raceRegistrationRepository.existsByRaceRaceIdAndSubmittedByUserIdAndStatusIn(
                 request.getRaceId(),
-                currentUser.getUserId())) {
+                currentUser.getUserId(),
+                activeStatuses)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Owner already registered a horse for this race"
