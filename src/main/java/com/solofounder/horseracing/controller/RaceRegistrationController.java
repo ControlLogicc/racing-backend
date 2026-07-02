@@ -48,4 +48,10 @@ public class RaceRegistrationController {
     public ResponseEntity<RegistrationResponse> rejectRegistration(@PathVariable Long registrationId) {
         return ResponseEntity.ok(raceRegistrationService.rejectRegistration(registrationId));
     }
+
+    @PutMapping("/{registrationId}/withdraw")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<RegistrationResponse> withdrawRegistration(@PathVariable Long registrationId) {
+        return ResponseEntity.ok(raceRegistrationService.withdrawRegistration(registrationId));
+    }
 }
