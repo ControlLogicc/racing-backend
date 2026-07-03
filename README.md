@@ -2,9 +2,6 @@
 
 Backend service for **HorseRacingMVP**, a full-stack web application for managing horse racing operations, including race scheduling, event management, and role-based access control.
 
-> 🔗 Frontend repository: [horseracing-frontend](../horseracing-frontend)
-> 🔗 Organization: [View all HorseRacingMVP repositories](../../)
-
 ---
 
 ## 📋 Overview
@@ -36,7 +33,7 @@ This service exposes a RESTful API that powers race scheduling, event management
 
 ## 👥 My Role — Team Coordinator & Backend Contributor
 
-As team coordinator for this 5-member project, I was responsible for:
+As team coordinator for this 4-member project, I was responsible for:
 - Breaking down project requirements into tasks and delegating them across the team
 - Managing timelines and tracking deliverables to keep the project on schedule
 - Contributing directly to backend development, including the JWT authentication and role-based access control system
@@ -65,4 +62,4 @@ Developed as an academic MVP (Minimum Viable Product) for the Software Engineeri
 
 ---
 
-*Developed by a 5-member team at FPT University, Ho Chi Minh City Campus.*
+*Developed by a 4-member team at FPT University, Ho Chi Minh City Campus.*
