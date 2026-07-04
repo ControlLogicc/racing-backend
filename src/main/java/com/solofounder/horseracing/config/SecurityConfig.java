@@ -31,6 +31,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/auth/**",
+                                "/api/news/**",
                                 "/uploads/images/**",
                                 "/referee-pre-check.html",
                                 "/error",

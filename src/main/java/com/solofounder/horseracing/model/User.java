@@ -49,12 +49,27 @@ public class User implements UserDetails {
     @Column(name = "status", nullable = false, length = 30)
     private UserStatus status;
 
+    @Column(name = "account_status", nullable = false, length = 50)
+    private String accountStatus;
+
+    @Column(name = "banned_reason", length = 500)
+    private String bannedReason;
+
+    @Column(name = "banned_at")
+    private LocalDateTime bannedAt;
+
+    @Column(name = "banned_by")
+    private Long bannedBy;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
+        if (this.accountStatus == null || this.accountStatus.isBlank()) {
+            this.accountStatus = "active";
+        }
     }
 
     @Override
@@ -84,7 +99,7 @@ public class User implements UserDetails {
     @Override
     @JsonIgnore
     public boolean isAccountNonLocked() {
-        return status != UserStatus.SUSPENDED;
+        return status != UserStatus.SUSPENDED && !isBanned();
     }
 
     @Override
@@ -96,6 +111,11 @@ public class User implements UserDetails {
     @Override
     @JsonIgnore
     public boolean isEnabled() {
-        return status == UserStatus.ACTIVE;
+        return status == UserStatus.ACTIVE && !isBanned();
+    }
+
+    @JsonIgnore
+    public boolean isBanned() {
+        return "banned".equalsIgnoreCase(accountStatus);
     }
 }
