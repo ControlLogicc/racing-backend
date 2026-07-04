@@ -1,9 +1,11 @@
 package com.solofounder.horseracing.controller;
 
 import com.solofounder.horseracing.dto.user.CreateInternalUserRequest;
+import com.solofounder.horseracing.dto.user.BanUserRequest;
 import com.solofounder.horseracing.dto.user.UserResponse;
 import com.solofounder.horseracing.model.User;
 import com.solofounder.horseracing.service.AuthService;
+import com.solofounder.horseracing.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -18,34 +20,31 @@ import java.util.List;
 public class AdminUserController {
 
     private final AuthService authService;
+    private final UserService userService;
 
     @PostMapping
     public ResponseEntity<UserResponse> createInternalUser(@Valid @RequestBody CreateInternalUserRequest request) {
         User createdUser = authService.adminCreateUser(request);
-        UserResponse response = UserResponse.builder()
-                .userId(createdUser.getUserId())
-                .fullName(createdUser.getFullName())
-                .email(createdUser.getEmail())
-                .phone(createdUser.getPhone())
-                .role(createdUser.getRole())
-                .status(createdUser.getStatus())
-                .build();
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(userService.toResponse(createdUser));
     }
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<UserResponse>> getAllUsers() {
-        List<UserResponse> responses = authService.getAllUsers().stream()
-                .map(user -> UserResponse.builder()
-                        .userId(user.getUserId())
-                        .fullName(user.getFullName())
-                        .email(user.getEmail())
-                        .phone(user.getPhone())
-                        .role(user.getRole())
-                        .status(user.getStatus())
-                        .build())
-                .toList();
-        return ResponseEntity.ok(responses);
+        return ResponseEntity.ok(userService.getAllUserResponses());
+    }
+
+    @PutMapping("/{userId}/ban")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<UserResponse> banUser(
+            @PathVariable Long userId,
+            @Valid @RequestBody BanUserRequest request) {
+        return ResponseEntity.ok(userService.banUser(userId, request));
+    }
+
+    @PutMapping("/{userId}/unban")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<UserResponse> unbanUser(@PathVariable Long userId) {
+        return ResponseEntity.ok(userService.unbanUser(userId));
     }
 }
