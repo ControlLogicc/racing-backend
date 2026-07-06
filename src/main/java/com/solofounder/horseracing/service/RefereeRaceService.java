@@ -16,6 +16,7 @@ import com.solofounder.horseracing.repository.RaceEntryRepository;
 import com.solofounder.horseracing.repository.RaceRepository;
 import com.solofounder.horseracing.repository.RefereeRepository;
 import com.solofounder.horseracing.repository.UserRepository;
+import com.solofounder.horseracing.util.PreRaceWeightCheck;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -25,14 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.math.RoundingMode;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class RefereeRaceService {
-
-    private static final BigDecimal WEIGHT_TOLERANCE_KG = new BigDecimal("0.50");
 
     private final RefereeRepository refereeRepository;
     private final RaceRepository raceRepository;
@@ -70,41 +68,49 @@ public class RefereeRaceService {
         }
 
         BigDecimal handicapWeight = entry.getHandicapWeight();
-        if (handicapWeight == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Handicap weight is not set for this race entry");
-        }
-
         BigDecimal jockeyActualWeight = request.getJockeyActualWeight();
-        if (jockeyActualWeight == null || jockeyActualWeight.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid jockey actual weight");
-        }
-
-        BigDecimal leadWeight = handicapWeight.subtract(jockeyActualWeight).max(BigDecimal.ZERO);
-        BigDecimal carriedWeight = jockeyActualWeight.add(leadWeight);
+        PreRaceWeightCheck.Result result = PreRaceWeightCheck.evaluate(jockeyActualWeight, handicapWeight);
 
         entry.setJockeyActualWeight(jockeyActualWeight);
-        entry.setLeadWeight(leadWeight);
-        entry.setCarriedWeight(carriedWeight);
-        String weightCheckStatus = calculateWeightCheckStatus(carriedWeight, handicapWeight);
-        entry.setWeightCheckStatus(weightCheckStatus);
-        entry.setEntryStatus("passed".equals(weightCheckStatus) ? "ready" : "scratched");
+        entry.setLeadWeight(BigDecimal.ZERO);
+        entry.setCarriedWeight(result.carriedWeight());
+        entry.setWeightCheckStatus(result.weightCheckStatus());
+        entry.setEntryStatus(result.entryStatus());
+        entry.setPreCheckNote(weightCheckNote(entry.getPreCheckNote(), result));
         entry.setWeightCheckedBy(referee);
         entry.setWeightCheckedAt(LocalDateTime.now());
 
         raceEntryRepository.save(entry);
 
         return JockeyWeightCheckResponse.builder()
+                .entryId(entry.getEntryId())
                 .handicapWeight(handicapWeight)
+                .actualWeight(jockeyActualWeight)
                 .jockeyActualWeight(jockeyActualWeight)
-                .leadWeight(leadWeight)
-                .carriedWeight(carriedWeight)
-                .weightCheckStatus(weightCheckStatus)
+                .leadWeight(BigDecimal.ZERO)
+                .carriedWeight(result.carriedWeight())
+                .overweightAmount(result.overweightAmount())
+                .weightCheckStatus(result.weightCheckStatus())
+                .entryStatus(result.entryStatus())
+                .horseName(entry.getHorse().getHorseName())
+                .jockeyName(entry.getJockey().getUser().getFullName())
+                .note(entry.getPreCheckNote())
                 .build();
     }
 
-    private String calculateWeightCheckStatus(BigDecimal carriedWeight, BigDecimal handicapWeight) {
-        BigDecimal diff = carriedWeight.subtract(handicapWeight).abs().setScale(2, RoundingMode.HALF_UP);
-        return diff.compareTo(WEIGHT_TOLERANCE_KG) <= 0 ? "passed" : "failed";
+    private String weightCheckNote(String existingNote, PreRaceWeightCheck.Result result) {
+        String automaticNote = null;
+        if (result.isOverweight() && result.isPassed()) {
+            automaticNote = "Overweight declared: +" + result.overweightAmount().toPlainString() + " kg";
+        } else if (!result.isPassed()) {
+            automaticNote = "Actual carried weight exceeds allowed overweight tolerance.";
+        }
+        if (automaticNote == null) {
+            return existingNote;
+        }
+        return existingNote == null || existingNote.isBlank()
+                ? automaticNote
+                : existingNote.trim() + " | " + automaticNote;
     }
 
     private Referee getCurrentReferee() {

@@ -28,6 +28,7 @@ public class RaceEntryResponse {
     private BigDecimal jockeyActualWeight;
     private BigDecimal leadWeight;
     private BigDecimal carriedWeight;
+    private BigDecimal overweightAmount;
     private String weightCheckStatus;
     private String preCheckNote;
     private Long weightCheckedBy;

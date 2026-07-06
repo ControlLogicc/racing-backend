@@ -30,6 +30,7 @@ import com.solofounder.horseracing.repository.RaceRepository;
 import com.solofounder.horseracing.repository.RefereeRepository;
 import com.solofounder.horseracing.repository.StaffRepository;
 import com.solofounder.horseracing.repository.UserRepository;
+import com.solofounder.horseracing.util.PreRaceWeightCheck;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -58,9 +59,6 @@ public class RaceEntryService {
     private static final String ENTRY_WITHDRAWN = "withdrawn";
     private static final String ENTRY_SCRATCHED = "scratched";
     private static final String ENTRY_DISQUALIFIED = "disqualified";
-    private static final String WEIGHT_PASSED = "passed";
-    private static final String WEIGHT_FAILED = "failed";
-    private static final BigDecimal WEIGHT_TOLERANCE_KG = new BigDecimal("0.50");
     private static final BigDecimal DEFAULT_TOP_WEIGHT_KG = new BigDecimal("61.2");
     private static final BigDecimal MIN_HANDICAP_WEIGHT_KG = new BigDecimal("51.3");
     private static final BigDecimal RATING_POINT_TO_KG = new BigDecimal("0.454");
@@ -168,24 +166,7 @@ public class RaceEntryService {
                     "Only DECLARED, READY, or SCRATCHED entries can be pre-checked");
         }
 
-        if (request.getHandicapWeight() != null) {
-            entry.setHandicapWeight(request.getHandicapWeight());
-        }
-        
-        // Cập nhật giá trị cân nặng
         applyWeightValues(entry, request.getActualWeight(), request.getNote(), currentUser);
-        
-        // Nếu client truyền trực tiếp leadWeight hoặc carriedWeight, ta ưu tiên sử dụng để đồng bộ với UI
-        if (request.getLeadWeight() != null) {
-            entry.setLeadWeight(request.getLeadWeight());
-        }
-        if (request.getCarriedWeight() != null) {
-            entry.setCarriedWeight(request.getCarriedWeight());
-            // Cập nhật lại status theo carried weight thực tế truyền lên
-            String status = calculateWeightCheckStatus(entry.getCarriedWeight(), entry.getHandicapWeight());
-            entry.setWeightCheckStatus(status);
-            entry.setEntryStatus(WEIGHT_PASSED.equals(status) ? ENTRY_READY : ENTRY_SCRATCHED);
-        }
 
         return toResponse(raceEntryRepository.save(entry));
     }
@@ -248,7 +229,7 @@ public class RaceEntryService {
             updatedEntries.add(entry);
         }
         for (int i = 0; i < updatedEntries.size(); i++) {
-            applyWeightCheck(updatedEntries.get(i), request, request.getChecks().get(i), currentUser);
+            applyWeightCheck(updatedEntries.get(i), request.getChecks().get(i), currentUser);
         }
 
         return raceEntryRepository.saveAll(updatedEntries).stream()
@@ -266,8 +247,7 @@ public class RaceEntryService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race entry not found"));
 
         BigDecimal actualWeight = request.getActualWeight();
-        applyCarriedWeight(entry, actualWeight);
-        entry.setWeightCheckStatus(normalizeEntryStatus(request.getWeightCheckStatus()));
+        applyWeightValues(entry, actualWeight, null, currentUser);
 
         return toResponse(raceEntryRepository.save(entry));
     }
@@ -319,31 +299,18 @@ public class RaceEntryService {
                 .toList();
     }
 
-    private void applyWeightCheck(RaceEntry entry, BatchWeightCheckRequest request, WeightCheckItemRequest check,
-            User currentUser) {
-        entry.setHandicapWeight(request.getHandicapWeight());
-        applyCarriedWeight(entry, check.getActualWeight());
-        entry.setPreCheckNote(trimToNull(check.getNote()));
-        boolean passed = Boolean.TRUE.equals(check.getPassed());
-        entry.setWeightCheckStatus(passed ? WEIGHT_PASSED : WEIGHT_FAILED);
-        entry.setEntryStatus(passed ? ENTRY_READY : ENTRY_SCRATCHED);
-        applyWeightCheckAudit(entry, currentUser);
+    private void applyWeightCheck(RaceEntry entry, WeightCheckItemRequest check, User currentUser) {
+        applyWeightValues(entry, check.getActualWeight(), check.getNote(), currentUser);
     }
 
     private void applyWeightValues(RaceEntry entry, BigDecimal actualWeight, String note, User currentUser) {
-        if (entry.getHandicapWeight() == null || actualWeight == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Actual weight and handicap weight are required for pre-check");
-        }
-
-        applyCarriedWeight(entry, actualWeight);
-        if (note != null) {
-            entry.setPreCheckNote(note.trim().isEmpty() ? null : note.trim());
-        }
-
-        String status = calculateWeightCheckStatus(entry.getCarriedWeight(), entry.getHandicapWeight());
-        entry.setWeightCheckStatus(status);
-        entry.setEntryStatus(WEIGHT_PASSED.equals(status) ? ENTRY_READY : ENTRY_SCRATCHED);
+        PreRaceWeightCheck.Result result = PreRaceWeightCheck.evaluate(actualWeight, entry.getHandicapWeight());
+        entry.setJockeyActualWeight(actualWeight);
+        entry.setLeadWeight(BigDecimal.ZERO);
+        entry.setCarriedWeight(result.carriedWeight());
+        entry.setWeightCheckStatus(result.weightCheckStatus());
+        entry.setEntryStatus(result.entryStatus());
+        entry.setPreCheckNote(weightCheckNote(note, result));
         applyWeightCheckAudit(entry, currentUser);
     }
 
@@ -355,18 +322,6 @@ public class RaceEntryService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Referee profile not found"));
         entry.setWeightCheckedBy(referee);
         entry.setWeightCheckedAt(LocalDateTime.now());
-    }
-
-    private void applyCarriedWeight(RaceEntry entry, BigDecimal actualWeight) {
-        BigDecimal leadWeight = BigDecimal.ZERO;
-        BigDecimal carriedWeight = actualWeight;
-        if (entry.getHandicapWeight() != null) {
-            leadWeight = entry.getHandicapWeight().subtract(actualWeight).max(BigDecimal.ZERO);
-            carriedWeight = actualWeight.add(leadWeight);
-        }
-        entry.setJockeyActualWeight(actualWeight);
-        entry.setLeadWeight(leadWeight);
-        entry.setCarriedWeight(carriedWeight);
     }
 
     private void requireWeightCheckPermission(User user, Race race) {
@@ -545,6 +500,7 @@ public class RaceEntryService {
                 .jockeyActualWeight(entry.getJockeyActualWeight())
                 .leadWeight(entry.getLeadWeight())
                 .carriedWeight(entry.getCarriedWeight())
+                .overweightAmount(calculateOverweightAmount(entry))
                 .weightCheckStatus(entry.getWeightCheckStatus())
                 .preCheckNote(entry.getPreCheckNote())
                 .weightCheckedBy(entry.getWeightCheckedBy() != null ? entry.getWeightCheckedBy().getRefereeId() : null)
@@ -559,13 +515,27 @@ public class RaceEntryService {
                 .build();
     }
 
-    private String calculateWeightCheckStatus(BigDecimal carriedWeight, BigDecimal handicapWeight) {
-        if (carriedWeight == null || handicapWeight == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Carried weight and handicap weight are required for pre-check");
+    private BigDecimal calculateOverweightAmount(RaceEntry entry) {
+        if (entry.getCarriedWeight() == null || entry.getHandicapWeight() == null) {
+            return null;
         }
-        BigDecimal diff = carriedWeight.subtract(handicapWeight).abs().setScale(2, RoundingMode.HALF_UP);
-        return diff.compareTo(WEIGHT_TOLERANCE_KG) <= 0 ? WEIGHT_PASSED : WEIGHT_FAILED;
+        return entry.getCarriedWeight().subtract(entry.getHandicapWeight())
+                .max(BigDecimal.ZERO)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String weightCheckNote(String requestedNote, PreRaceWeightCheck.Result result) {
+        String note = trimToNull(requestedNote);
+        String automaticNote = null;
+        if (result.isOverweight() && result.isPassed()) {
+            automaticNote = "Overweight declared: +" + result.overweightAmount().toPlainString() + " kg";
+        } else if (!result.isPassed()) {
+            automaticNote = "Actual carried weight exceeds allowed overweight tolerance.";
+        }
+        if (automaticNote == null) {
+            return note;
+        }
+        return note == null ? automaticNote : note + " | " + automaticNote;
     }
 
     private String normalizeEntryStatus(String status) {
