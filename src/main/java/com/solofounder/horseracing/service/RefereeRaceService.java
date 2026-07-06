@@ -98,19 +98,12 @@ public class RefereeRaceService {
                 .build();
     }
 
-    private String weightCheckNote(String existingNote, PreRaceWeightCheck.Result result) {
-        String automaticNote = null;
-        if (result.isOverweight() && result.isPassed()) {
-            automaticNote = "Overweight declared: +" + result.overweightAmount().toPlainString() + " kg";
-        } else if (!result.isPassed()) {
-            automaticNote = "Actual carried weight exceeds allowed overweight tolerance.";
+    private String calculateWeightCheckStatus(BigDecimal carriedWeight, BigDecimal handicapWeight) {
+        if (carriedWeight.compareTo(handicapWeight) >= 0) {
+            return "passed";
         }
-        if (automaticNote == null) {
-            return existingNote;
-        }
-        return existingNote == null || existingNote.isBlank()
-                ? automaticNote
-                : existingNote.trim() + " | " + automaticNote;
+        BigDecimal diff = handicapWeight.subtract(carriedWeight).setScale(2, RoundingMode.HALF_UP);
+        return diff.compareTo(WEIGHT_TOLERANCE_KG) <= 0 ? "passed" : "failed";
     }
 
     private Referee getCurrentReferee() {

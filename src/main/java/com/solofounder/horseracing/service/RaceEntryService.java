@@ -535,7 +535,11 @@ public class RaceEntryService {
         if (automaticNote == null) {
             return note;
         }
-        return note == null ? automaticNote : note + " | " + automaticNote;
+        if (carriedWeight.compareTo(handicapWeight) >= 0) {
+            return WEIGHT_PASSED;
+        }
+        BigDecimal diff = handicapWeight.subtract(carriedWeight).setScale(2, RoundingMode.HALF_UP);
+        return diff.compareTo(WEIGHT_TOLERANCE_KG) <= 0 ? WEIGHT_PASSED : WEIGHT_FAILED;
     }
 
     private String normalizeEntryStatus(String status) {

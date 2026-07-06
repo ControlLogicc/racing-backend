@@ -1,100 +1,65 @@
-# 🏇 Horse Racing Management System — Backend
+# 🐎 HorseRacing — Backend
 
-Hệ thống xử lý logic nghiệp vụ, quản lý cơ sở dữ liệu và cung cấp API cho dự án Đua ngựa.  
-Được xây dựng trên nền tảng **Java Web**.
+Backend service for **HorseRacingMVP**, a full-stack web application for managing horse racing operations, including race scheduling, event management, and role-based access control.
 
 ---
 
-##  Tech Stack
+## 📋 Overview
 
-| Thành phần | Công nghệ |
+This service exposes a RESTful API that powers race scheduling, event management, and secure role-based access for the HorseRacingMVP platform. It handles authentication, authorization, and all core business logic for the racing ecosystem.
+
+## ✨ Key Features
+
+- **Race & Schedule Management** — REST endpoints for creating, updating, and tracking races and event calendars
+- **Role-Based Access Control (RBAC)** — 6 distinct user roles with tailored permissions:
+  - **Admin** — full system control, user and race management
+  - **Staff** — operational management of races and events
+  - **Owner** — manages horses and views race entries
+  - **Jockey** — views assigned races and schedules
+  - **User** — general registered access
+  - **Spectator** — public/read-only access to race information
+- **JWT Authentication** — secure, stateless login and session management
+- **RESTful API Design** — clean, resource-based endpoints following REST conventions
+
+## 🛠️ Tech Stack
+
+| Component | Technology |
 |---|---|
-| Language | Java (JDK 17+) |
+| Language | Java |
+| Framework | Spring Boot |
+| Database | Microsoft SQL Server |
+| Authentication | JWT (JSON Web Token) |
 | Build Tool | Maven |
-| Database | SQL Server |
-| Libraries | JDBC / JPA (Lombok, JUnit 5) |
-| Architecture | MVC / Layered Architecture |
 
----
+## 👥 My Role — Team Coordinator & Backend Contributor
 
-##  Hướng dẫn thiết lập
+As team coordinator for this 4-member project, I was responsible for:
+- Breaking down project requirements into tasks and delegating them across the team
+- Managing timelines and tracking deliverables to keep the project on schedule
+- Contributing directly to backend development, including the JWT authentication and role-based access control system
+- Coordinating API integration with the [frontend repository](../horseracing-frontend)
 
-### 1. Cấu hình cơ sở dữ liệu
+## 🚀 Getting Started
 
-1. Mở **SQL Server Management Studio (SSMS)**.
-2. Chạy file `/database/schema.sql` để tạo các bảng.
-3. Chạy file `/database/data.sql` để nạp dữ liệu mẫu.
+### Prerequisites
+- Java JDK 17+
+- Maven
+- SQL Server
 
-### 2. Cấu hình kết nối
-
-Mở file `src/main/resources/db.properties` và cập nhật thông số sau:
-
-```properties
-db.url=jdbc:sqlserver://localhost:1433;databaseName=HorseRacingDB
-db.user=your_username
-db.password=your_password
-```
-
-### 3. Cài đặt & Chạy dự án
-
+### Setup
 ```bash
-# Cài đặt thư viện
+git clone <this-repo-url>
+cd horseracing-backend
 mvn clean install
-
-# Chạy Unit Test (bắt buộc trước khi push code)
-mvn test
-
-# Khởi động server
 mvn spring-boot:run
 ```
 
----
+Configure your database connection in `src/main/resources/application.properties` before running.
 
-##  Cấu trúc thư mục
+## 📌 Project Status
 
-```
-src/main/java/com/racing/
-├── model/       # Entities ánh xạ từ Database
-├── dao/         # Data Access Object — chứa các câu lệnh SQL
-├── dto/         # Data Transfer Object — dữ liệu trả về cho Frontend
-├── service/     # Xử lý logic nghiệp vụ chính
-└── controller/  # Tiếp nhận Request và trả về JSON API
-```
+Developed as an academic MVP (Minimum Viable Product) for the Software Engineering / Software Testing coursework at FPT University, demonstrating REST API design, authentication/authorization architecture, and team collaboration.
 
 ---
 
-##  Quy tắc code (Convention)
-
-### Đặt tên
-
-| Loại | Quy tắc | Ví dụ |
-|---|---|---|
-| Class | `PascalCase` | `HorseService.java`, `UserDAO.java` |
-| Method / Variable | `camelCase` | `getHorseById`, `isActive` |
-
-### DAO & DTO
-
--  **Tuyệt đối không** trả về trực tiếp lớp Model cho Frontend (tránh lộ thông tin nhạy cảm).
--  Mọi dữ liệu trả về qua API **phải được đóng gói vào DTO**.
-
-### Unit Testing
-
-- Mọi hàm xử lý logic tại lớp **Service** và **DAO** đều phải có file Test tương ứng trong `src/test`.
-
-### Git Flow
-
--  Nhánh chính: `main` _(Stable)_ · `develop` _(Working)_
--  **Tuyệt đối không** push trực tiếp lên `main` hoặc `develop`.
--  Tạo nhánh tính năng theo cú pháp: `feature/be-ten-tinh-nang`
--  Tạo **Pull Request (PR)** và chờ Leader review trước khi Merge.
-
----
-
-##  Thành viên Backend
-
-| Tên | Vai trò |
-|---|---|
-| Tạ Vũ Hảo (Leader) | Backend Architect & DevOps |
-| Nguyễn Hồng Duy | Backend Developer & Database Design |
-
-
+*Developed by a 4-member team at FPT University, Ho Chi Minh City Campus.*

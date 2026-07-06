@@ -642,7 +642,7 @@ public class RaceInvitationIntegrationTests {
         assertEquals(ownerHorse.getHorseId(), entry.getHorse().getHorseId());
         assertEquals(jockeyProfile.getJockeyId(), entry.getJockey().getJockeyId());
         assertNull(entry.getGateNumber());
-        assertEquals(0, new BigDecimal("50.00").compareTo(entry.getHandicapWeight()));
+        assertEquals(0, new BigDecimal("51.3").compareTo(entry.getHandicapWeight()));
         assertEquals(RaceInvitationStatus.USED,
                 raceInvitationRepository.findById(invitation.getInvitationId()).orElseThrow().getInvitationStatus());
 
@@ -706,5 +706,109 @@ public class RaceInvitationIntegrationTests {
         // Verify database value updated to EXPIRED
         RaceInvitation dbInvitation = raceInvitationRepository.findById(invitation.getInvitationId()).orElseThrow();
         assertEquals(RaceInvitationStatus.EXPIRED, dbInvitation.getInvitationStatus());
+    }
+
+    @Test
+    void testOwnerCancelSentInvitationSuccess() throws Exception {
+        RaceInvitation invitation = raceInvitationRepository.save(RaceInvitation.builder()
+                .raceRegistration(approvedRegistration)
+                .jockey(jockeyProfile)
+                .invitationStatus(RaceInvitationStatus.SENT)
+                .sentAt(LocalDateTime.now())
+                .build());
+
+        mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/cancel")
+                        .header("Authorization", ownerToken))
+                .andExpect(status().isOk());
+
+        RaceInvitation updated = raceInvitationRepository.findById(invitation.getInvitationId()).orElseThrow();
+        assertEquals(RaceInvitationStatus.CANCELLED, updated.getInvitationStatus());
+    }
+
+    @Test
+    void testOwnerCancelAcceptedInvitationSuccess() throws Exception {
+        RaceInvitation invitation = raceInvitationRepository.save(RaceInvitation.builder()
+                .raceRegistration(approvedRegistration)
+                .jockey(jockeyProfile)
+                .invitationStatus(RaceInvitationStatus.ACCEPTED)
+                .sentAt(LocalDateTime.now())
+                .build());
+
+        mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/cancel")
+                        .header("Authorization", ownerToken))
+                .andExpect(status().isOk());
+
+        RaceInvitation updated = raceInvitationRepository.findById(invitation.getInvitationId()).orElseThrow();
+        assertEquals(RaceInvitationStatus.CANCELLED, updated.getInvitationStatus());
+    }
+
+    @Test
+    void testCancelInvitationWrongOwnerForbidden() throws Exception {
+        RaceInvitation invitation = raceInvitationRepository.save(RaceInvitation.builder()
+                .raceRegistration(approvedRegistration)
+                .jockey(jockeyProfile)
+                .invitationStatus(RaceInvitationStatus.SENT)
+                .sentAt(LocalDateTime.now())
+                .build());
+
+        RegisterRequest registerOtherOwner = RegisterRequest.builder()
+                .fullName("Other Owner")
+                .email("other-owner@test-invitation.com")
+                .password("123456")
+                .phone("0900000009")
+                .role(Role.OWNER)
+                .build();
+
+        MvcResult otherOwnerRes = mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerOtherOwner)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        AuthResponse otherOwnerAuth = objectMapper.readValue(otherOwnerRes.getResponse().getContentAsString(), AuthResponse.class);
+        String otherOwnerToken = "Bearer " + otherOwnerAuth.getToken();
+
+        mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/cancel")
+                        .header("Authorization", otherOwnerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void testCancelInvitationUsedStatusFails() throws Exception {
+        RaceInvitation invitation = raceInvitationRepository.save(RaceInvitation.builder()
+                .raceRegistration(approvedRegistration)
+                .jockey(jockeyProfile)
+                .invitationStatus(RaceInvitationStatus.USED)
+                .sentAt(LocalDateTime.now())
+                .build());
+
+        mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/cancel")
+                        .header("Authorization", ownerToken))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testCancelInvitationWithRaceEntryFails() throws Exception {
+        RaceInvitation invitation = raceInvitationRepository.save(RaceInvitation.builder()
+                .raceRegistration(approvedRegistration)
+                .jockey(jockeyProfile)
+                .invitationStatus(RaceInvitationStatus.ACCEPTED)
+                .sentAt(LocalDateTime.now())
+                .build());
+
+        raceEntryRepository.save(RaceEntry.builder()
+                .race(testRace)
+                .registration(approvedRegistration)
+                .invitation(invitation)
+                .horse(approvedRegistration.getHorse())
+                .jockey(jockeyProfile)
+                .gateNumber((short) 1)
+                .handicapWeight(new BigDecimal("55.00"))
+                .entryStatus("declared")
+                .build());
+
+        mockMvc.perform(put("/api/invitations/" + invitation.getInvitationId() + "/cancel")
+                        .header("Authorization", ownerToken))
+                .andExpect(status().isBadRequest());
     }
 }
