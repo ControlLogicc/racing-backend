@@ -53,10 +53,12 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.springframework.http.MediaType;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -238,7 +240,7 @@ class RefereeRaceIntegrationTests {
     }
 
     @Test
-    void weightCheckJockeyLessWeightAddsLead() throws Exception {
+    void weightCheckBelowHandicapRequiresBallast() throws Exception {
         assignedEntry.setHandicapWeight(new BigDecimal("55.00"));
         raceEntryRepository.save(assignedEntry);
 
@@ -246,37 +248,27 @@ class RefereeRaceIntegrationTests {
                 .jockeyActualWeight(new BigDecimal("52.00"))
                 .build();
 
-        MvcResult result = mockMvc.perform(put("/api/referee/race-entries/" + assignedEntry.getEntryId() + "/weight-check")
+        mockMvc.perform(put("/api/referee/race-entries/" + assignedEntry.getEntryId() + "/weight-check")
                         .header("Authorization", assignedRefereeToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn();
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(
+                        "Actual carried weight is below handicap weight. Add ballast and check again."));
 
-        JockeyWeightCheckResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), JockeyWeightCheckResponse.class);
-        assertEquals(0, new BigDecimal("55.00").compareTo(response.getHandicapWeight()));
-        assertEquals(0, new BigDecimal("52.00").compareTo(response.getJockeyActualWeight()));
-        assertEquals(0, new BigDecimal("3.00").compareTo(response.getLeadWeight()));
-        assertEquals(0, new BigDecimal("55.00").compareTo(response.getCarriedWeight()));
-        assertEquals("passed", response.getWeightCheckStatus());
-
-        // Verify database entry was updated
         RaceEntry updated = raceEntryRepository.findById(assignedEntry.getEntryId()).orElseThrow();
-        assertEquals(0, new BigDecimal("52.00").compareTo(updated.getJockeyActualWeight()));
-        assertEquals(0, new BigDecimal("3.00").compareTo(updated.getLeadWeight()));
-        assertEquals(0, new BigDecimal("55.00").compareTo(updated.getCarriedWeight()));
-        assertEquals("passed", updated.getWeightCheckStatus());
-        assertEquals(assignedReferee.getRefereeId(), updated.getWeightCheckedBy().getRefereeId());
-        assertTrue(updated.getWeightCheckedAt().isBefore(LocalDateTime.now().plusSeconds(5)));
+        assertNull(updated.getJockeyActualWeight());
+        assertNull(updated.getWeightCheckStatus());
+        assertEquals("declared", updated.getEntryStatus());
     }
 
     @Test
-    void weightCheckJockeyMoreWeightKeepsActual() throws Exception {
+    void weightCheckOverweightWithinTolerancePasses() throws Exception {
         assignedEntry.setHandicapWeight(new BigDecimal("55.00"));
         raceEntryRepository.save(assignedEntry);
 
         JockeyWeightCheckRequest request = JockeyWeightCheckRequest.builder()
-                .jockeyActualWeight(new BigDecimal("57.00"))
+                .jockeyActualWeight(new BigDecimal("55.91"))
                 .build();
 
         MvcResult result = mockMvc.perform(put("/api/referee/race-entries/" + assignedEntry.getEntryId() + "/weight-check")
@@ -288,17 +280,45 @@ class RefereeRaceIntegrationTests {
 
         JockeyWeightCheckResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), JockeyWeightCheckResponse.class);
         assertEquals(0, new BigDecimal("55.00").compareTo(response.getHandicapWeight()));
-        assertEquals(0, new BigDecimal("57.00").compareTo(response.getJockeyActualWeight()));
+        assertEquals(0, new BigDecimal("55.91").compareTo(response.getJockeyActualWeight()));
         assertEquals(0, new BigDecimal("0.00").compareTo(response.getLeadWeight()));
-        assertEquals(0, new BigDecimal("57.00").compareTo(response.getCarriedWeight()));
+        assertEquals(0, new BigDecimal("55.91").compareTo(response.getCarriedWeight()));
+        assertEquals(0, new BigDecimal("0.91").compareTo(response.getOverweightAmount()));
         assertEquals("passed", response.getWeightCheckStatus());
+        assertEquals("ready", response.getEntryStatus());
 
-        // Verify database entry was updated
         RaceEntry updated = raceEntryRepository.findById(assignedEntry.getEntryId()).orElseThrow();
-        assertEquals(0, new BigDecimal("57.00").compareTo(updated.getJockeyActualWeight()));
+        assertEquals(0, new BigDecimal("55.91").compareTo(updated.getJockeyActualWeight()));
         assertEquals(0, new BigDecimal("0.00").compareTo(updated.getLeadWeight()));
-        assertEquals(0, new BigDecimal("57.00").compareTo(updated.getCarriedWeight()));
+        assertEquals(0, new BigDecimal("55.91").compareTo(updated.getCarriedWeight()));
         assertEquals("passed", updated.getWeightCheckStatus());
+        assertTrue(updated.getPreCheckNote().contains("Overweight declared: +0.91 kg"));
+    }
+
+    @Test
+    void weightCheckOverweightAboveToleranceFails() throws Exception {
+        assignedEntry.setHandicapWeight(new BigDecimal("55.00"));
+        raceEntryRepository.save(assignedEntry);
+
+        JockeyWeightCheckRequest request = JockeyWeightCheckRequest.builder()
+                .jockeyActualWeight(new BigDecimal("55.92"))
+                .build();
+
+        MvcResult result = mockMvc.perform(put("/api/referee/race-entries/" + assignedEntry.getEntryId() + "/weight-check")
+                        .header("Authorization", assignedRefereeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JockeyWeightCheckResponse response = objectMapper.readValue(
+                result.getResponse().getContentAsString(),
+                JockeyWeightCheckResponse.class
+        );
+        assertEquals("failed", response.getWeightCheckStatus());
+        assertEquals("scratched", response.getEntryStatus());
+        assertEquals(0, new BigDecimal("0.92").compareTo(response.getOverweightAmount()));
+        assertEquals("Actual carried weight exceeds allowed overweight tolerance.", response.getNote());
     }
 
     @Test

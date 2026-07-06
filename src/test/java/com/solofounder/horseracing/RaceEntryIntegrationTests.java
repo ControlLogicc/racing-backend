@@ -593,7 +593,7 @@ public class RaceEntryIntegrationTests {
                         WeightCheckItemRequest.builder()
                                 .entryId(entry1.getEntryId())
                                 .actualWeight(new BigDecimal("55.20"))
-                                .passed(true)
+                                .passed(false)
                                 .note("Passed")
                                 .build(),
                         WeightCheckItemRequest.builder()
@@ -686,6 +686,11 @@ public class RaceEntryIntegrationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
+
+        RaceEntry unchanged = raceEntryRepository.findById(entry.getEntryId()).orElseThrow();
+        assertNull(unchanged.getJockeyActualWeight());
+        assertNull(unchanged.getWeightCheckStatus());
+        assertEquals("declared", unchanged.getEntryStatus());
     }
 
     @Test
