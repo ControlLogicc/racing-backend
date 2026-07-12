@@ -1,5 +1,7 @@
-package com.solofounder.horseracing.config;
+package com.solofounder.horseracing.service;
 
+import com.solofounder.horseracing.config.JwtAuthenticationFilter;
+import com.solofounder.horseracing.config.JwtService;
 import com.solofounder.horseracing.model.User;
 import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.model.enums.UserStatus;

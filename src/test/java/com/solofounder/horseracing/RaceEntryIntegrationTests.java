@@ -579,7 +579,7 @@ public class RaceEntryIntegrationTests {
 
         RaceEntryResponse response = objectMapper.readValue(updatedResult.getResponse().getContentAsString(), RaceEntryResponse.class);
         assertEquals(new BigDecimal("51.0"), response.getActualWeight());
-        assertEquals("PASSED", response.getWeightCheckStatus());
+        assertEquals("passed", response.getWeightCheckStatus());
     }
 
     @Test
@@ -1459,7 +1459,7 @@ public class RaceEntryIntegrationTests {
                 assertEquals(0, new BigDecimal("51.0").compareTo(response.getJockeyActualWeight()));
                 assertEquals(0, new BigDecimal("0.0").compareTo(response.getLeadWeight()));
                 assertEquals(0, new BigDecimal("51.0").compareTo(response.getCarriedWeight()));
-                assertEquals("PASSED", response.getWeightCheckStatus());
+                assertEquals("passed", response.getWeightCheckStatus());
         }
 
         @Test
