@@ -44,6 +44,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,
                                 "/api/races/**",
                                 "/api/results/**",
+                                "/api/entries/race/*",
                                 "/api/admin/horses/**",
                                 "/api/admin/race-meetings/**",
                                 "/api/admin/prize-structures/**"

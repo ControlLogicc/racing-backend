@@ -45,6 +45,7 @@ public class PrizeStructureService {
                 .amount(validateMoney(request.getAmount(), "Amount is required"))
                 .score(validateMoney(request.getScore(), "Score is required"))
                 .build();
+        validatePrizeOrder(race.getRaceId(), prizeStructure, null);
         return toResponse(prizeStructureRepository.save(prizeStructure));
     }
 
@@ -59,6 +60,7 @@ public class PrizeStructureService {
         prizeStructure.setPosition(position);
         prizeStructure.setAmount(validateMoney(request.getAmount(), "Amount is required"));
         prizeStructure.setScore(validateMoney(request.getScore(), "Score is required"));
+        validatePrizeOrder(race.getRaceId(), prizeStructure, prizeId);
         return toResponse(prizeStructureRepository.save(prizeStructure));
     }
 
@@ -98,6 +100,26 @@ public class PrizeStructureService {
             throw new IllegalArgumentException("Amount and score must be greater than or equal to 0");
         }
         return value;
+    }
+
+    private void validatePrizeOrder(Long raceId, PrizeStructure candidate, Long ignoredPrizeId) {
+        List<PrizeStructure> prizeStructures = prizeStructureRepository.findByRaceRaceIdOrderByPositionAsc(raceId)
+                .stream()
+                .filter(prize -> ignoredPrizeId == null || !ignoredPrizeId.equals(prize.getPrizeId()))
+                .collect(java.util.ArrayList::new, java.util.ArrayList::add, java.util.ArrayList::addAll);
+        prizeStructures.add(candidate);
+        prizeStructures.sort(java.util.Comparator.comparing(PrizeStructure::getPosition));
+
+        for (int i = 1; i < prizeStructures.size(); i++) {
+            PrizeStructure previous = prizeStructures.get(i - 1);
+            PrizeStructure current = prizeStructures.get(i);
+            if (current.getAmount().compareTo(previous.getAmount()) > 0) {
+                throw new IllegalArgumentException("Prize amount for a lower position cannot be greater than a higher position");
+            }
+            if (current.getScore().compareTo(previous.getScore()) > 0) {
+                throw new IllegalArgumentException("Prize score for a lower position cannot be greater than a higher position");
+            }
+        }
     }
 
     private PrizeStructureResponse toResponse(PrizeStructure prizeStructure) {
