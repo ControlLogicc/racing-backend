@@ -18,8 +18,11 @@ public class AdminPrizeStructureController {
     private final PrizeStructureService prizeStructureService;
 
     @GetMapping
-    public ResponseEntity<List<PrizeStructureResponse>> getAllPrizeStructures() {
-        return ResponseEntity.ok(prizeStructureService.getAllPrizeStructures());
+    public ResponseEntity<List<PrizeStructureResponse>> getPrizeStructures(
+            @RequestParam(required = false) Long raceId) {
+        return ResponseEntity.ok(raceId != null
+                ? prizeStructureService.getPrizeStructuresByRace(raceId)
+                : prizeStructureService.getAllPrizeStructures());
     }
 
     @GetMapping("/{id}")

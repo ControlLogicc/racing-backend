@@ -29,6 +29,15 @@ public class PrizeStructureService {
                 .toList();
     }
 
+    public List<PrizeStructureResponse> getPrizeStructuresByRace(Long raceId) {
+        if (raceId == null) {
+            throw new IllegalArgumentException("Race id is required");
+        }
+        return prizeStructureRepository.findByRaceRaceIdOrderByPositionAsc(raceId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     public PrizeStructureResponse getPrizeStructure(Long prizeId) {
         return toResponse(findPrizeStructure(prizeId));
     }
