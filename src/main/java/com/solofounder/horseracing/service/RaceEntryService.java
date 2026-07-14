@@ -287,11 +287,25 @@ public class RaceEntryService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
         }
 
+        Race race = raceRepository.findById(raceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race not found"));
+
         List<RaceEntry> entries = raceEntryRepository.findByRaceRaceId(raceId).stream()
                 .filter(entry -> !isTerminalEntryStatus(entry.getEntryStatus()))
                 .toList();
         if (entries.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No active entries found for this race");
+        }
+
+        int minEntries = 8;
+        if (race.getRaceCondition() != null && race.getRaceCondition().getMinEntries() != null) {
+            minEntries = race.getRaceCondition().getMinEntries();
+        }
+
+        if (entries.size() < minEntries) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot randomize gates. Active entries count (" + entries.size()
+                    + ") is less than the minimum required (" + minEntries + ")");
         }
 
         List<Integer> gates = new ArrayList<>();

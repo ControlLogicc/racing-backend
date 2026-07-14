@@ -39,11 +39,15 @@ public class PrizeStructureService {
         if (prizeStructureRepository.existsByRaceRaceIdAndPosition(race.getRaceId(), position)) {
             throw new IllegalArgumentException("Prize structure position already exists for this race");
         }
+        
+        BigDecimal amount = validateAmount(request.getAmount(), position);
+        BigDecimal score = validateScore(request.getScore(), position);
+
         PrizeStructure prizeStructure = PrizeStructure.builder()
                 .race(race)
                 .position(position)
-                .amount(validateMoney(request.getAmount(), "Amount is required"))
-                .score(validateMoney(request.getScore(), "Score is required"))
+                .amount(amount)
+                .score(score)
                 .build();
         validatePrizeOrder(race.getRaceId(), prizeStructure, null);
         return toResponse(prizeStructureRepository.save(prizeStructure));
@@ -56,10 +60,14 @@ public class PrizeStructureService {
         if (prizeStructureRepository.existsByRaceRaceIdAndPositionAndPrizeIdNot(race.getRaceId(), position, prizeId)) {
             throw new IllegalArgumentException("Prize structure position already exists for this race");
         }
+        
+        BigDecimal amount = validateAmount(request.getAmount(), position);
+        BigDecimal score = validateScore(request.getScore(), position);
+
         prizeStructure.setRace(race);
         prizeStructure.setPosition(position);
-        prizeStructure.setAmount(validateMoney(request.getAmount(), "Amount is required"));
-        prizeStructure.setScore(validateMoney(request.getScore(), "Score is required"));
+        prizeStructure.setAmount(amount);
+        prizeStructure.setScore(score);
         validatePrizeOrder(race.getRaceId(), prizeStructure, prizeId);
         return toResponse(prizeStructureRepository.save(prizeStructure));
     }
@@ -92,14 +100,36 @@ public class PrizeStructureService {
         return position;
     }
 
-    private BigDecimal validateMoney(BigDecimal value, String requiredMessage) {
-        if (value == null) {
-            throw new IllegalArgumentException(requiredMessage);
+    private BigDecimal validateAmount(BigDecimal amount, Short position) {
+        if (position >= 4 && amount == null) {
+            return BigDecimal.ZERO;
         }
-        if (value.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("Amount and score must be greater than or equal to 0");
+        if (amount == null) {
+            throw new IllegalArgumentException("Amount is required for position " + position);
         }
-        return value;
+        if (amount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Amount must be greater than or equal to 0");
+        }
+        return amount;
+    }
+
+    private BigDecimal validateScore(BigDecimal score, Short position) {
+        if ((position == 4 || position == 5 || position == 6) && score == null) {
+            score = BigDecimal.ZERO;
+        }
+        if (score == null) {
+            throw new IllegalArgumentException("Score is required for position " + position);
+        }
+        if (position <= 6) {
+            if (score.compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException("Score for positions 1 to 6 must be greater than or equal to 0");
+            }
+        } else {
+            if (score.compareTo(BigDecimal.ZERO) >= 0) {
+                throw new IllegalArgumentException("Score for position 7 and below must be negative (less than 0)");
+            }
+        }
+        return score;
     }
 
     private void validatePrizeOrder(Long raceId, PrizeStructure candidate, Long ignoredPrizeId) {

@@ -188,7 +188,7 @@ public class RaceEntryRandomizationIntegrationTests {
                 .distance(1200)
                 .trackType("turf")
                 .classRequirement("class 5")
-                .minEntries((short) 5)
+                .minEntries((short) 3)
                 .maxEntries((short) 10)
                 .build());
 
