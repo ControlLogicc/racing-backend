@@ -17,9 +17,7 @@ public class PrizeStructureRequest {
     @NotNull(message = "Position is required")
     private Short position;
 
-    @NotNull(message = "Amount is required")
     private BigDecimal amount;
 
-    @NotNull(message = "Score is required")
     private BigDecimal score;
 }
