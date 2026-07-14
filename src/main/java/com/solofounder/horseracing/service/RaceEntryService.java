@@ -166,7 +166,18 @@ public class RaceEntryService {
                     "Only DECLARED, READY, or SCRATCHED entries can be pre-checked");
         }
 
-        applyWeightValues(entry, request.getActualWeight(), request.getNote(), currentUser);
+        if (request.getHandicapWeight() != null) {
+            entry.setHandicapWeight(validatePositiveWeight(request.getHandicapWeight(),
+                    "Handicap weight must be greater than 0"));
+        }
+        applyWeightValues(
+                entry,
+                request.getActualWeight(),
+                request.getLeadWeight(),
+                request.getCarriedWeight(),
+                request.getNote(),
+                currentUser
+        );
 
         return toResponse(raceEntryRepository.save(entry));
     }
@@ -229,7 +240,7 @@ public class RaceEntryService {
             updatedEntries.add(entry);
         }
         for (int i = 0; i < updatedEntries.size(); i++) {
-            applyWeightCheck(updatedEntries.get(i), request.getChecks().get(i), currentUser);
+            applyWeightCheck(updatedEntries.get(i), request.getHandicapWeight(), request.getChecks().get(i), currentUser);
         }
 
         return raceEntryRepository.saveAll(updatedEntries).stream()
@@ -247,7 +258,7 @@ public class RaceEntryService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Race entry not found"));
 
         BigDecimal actualWeight = request.getActualWeight();
-        applyWeightValues(entry, actualWeight, null, currentUser);
+        applyWeightValues(entry, actualWeight, null, null, null, currentUser);
 
         return toResponse(raceEntryRepository.save(entry));
     }
@@ -299,19 +310,55 @@ public class RaceEntryService {
                 .toList();
     }
 
-    private void applyWeightCheck(RaceEntry entry, WeightCheckItemRequest check, User currentUser) {
-        applyWeightValues(entry, check.getActualWeight(), check.getNote(), currentUser);
+    private void applyWeightCheck(RaceEntry entry, BigDecimal handicapWeight, WeightCheckItemRequest check, User currentUser) {
+        entry.setHandicapWeight(validatePositiveWeight(handicapWeight,
+                "Handicap weight must be greater than 0"));
+        applyWeightValues(entry, check.getActualWeight(), null, null, check.getNote(), currentUser);
     }
 
-    private void applyWeightValues(RaceEntry entry, BigDecimal actualWeight, String note, User currentUser) {
-        PreRaceWeightCheck.Result result = PreRaceWeightCheck.evaluate(actualWeight, entry.getHandicapWeight());
-        entry.setJockeyActualWeight(actualWeight);
-        entry.setLeadWeight(BigDecimal.ZERO);
+    private void applyWeightValues(RaceEntry entry,
+                                   BigDecimal jockeyActualWeight,
+                                   BigDecimal leadWeight,
+                                   BigDecimal carriedWeight,
+                                   String note,
+                                   User currentUser) {
+        BigDecimal normalizedJockeyActualWeight = validatePositiveWeight(jockeyActualWeight,
+                "Actual weight must be greater than 0");
+        BigDecimal normalizedLeadWeight = validateNonNegativeWeight(leadWeight,
+                "Lead weight must be greater than or equal to 0");
+        BigDecimal calculatedCarriedWeight = normalizedJockeyActualWeight.add(normalizedLeadWeight);
+        BigDecimal resolvedCarriedWeight = carriedWeight != null
+                ? validatePositiveWeight(carriedWeight, "Carried weight must be greater than 0")
+                : calculatedCarriedWeight;
+        if (resolvedCarriedWeight.compareTo(calculatedCarriedWeight) != 0) {
+            resolvedCarriedWeight = calculatedCarriedWeight;
+        }
+
+        PreRaceWeightCheck.Result result = PreRaceWeightCheck.evaluate(resolvedCarriedWeight, entry.getHandicapWeight());
+        entry.setJockeyActualWeight(normalizedJockeyActualWeight);
+        entry.setLeadWeight(normalizedLeadWeight);
         entry.setCarriedWeight(result.carriedWeight());
         entry.setWeightCheckStatus(result.weightCheckStatus());
         entry.setEntryStatus(result.entryStatus());
         entry.setPreCheckNote(weightCheckNote(note, result));
         applyWeightCheckAudit(entry, currentUser);
+    }
+
+    private BigDecimal validatePositiveWeight(BigDecimal value, String message) {
+        if (value == null || value.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+        }
+        return value;
+    }
+
+    private BigDecimal validateNonNegativeWeight(BigDecimal value, String message) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        if (value.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+        }
+        return value;
     }
 
     private void applyWeightCheckAudit(RaceEntry entry, User currentUser) {
