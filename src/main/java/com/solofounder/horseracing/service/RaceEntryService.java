@@ -671,22 +671,36 @@ public class RaceEntryService {
     }
 
     private void recalculateHandicapWeights(List<RaceEntry> entries) {
-        BigDecimal topRating = entries.stream()
-                .map(RaceEntry::getHorse)
-                .filter(java.util.Objects::nonNull)
-                .map(Horse::getCurrentScore)
-                .filter(java.util.Objects::nonNull)
-                .max(BigDecimal::compareTo)
-                .orElse(BigDecimal.ZERO);
+        if (entries == null || entries.isEmpty()) return;
+
+        // Tìm topRating và topClass trong toàn bộ field
+        BigDecimal topRating = BigDecimal.ZERO;
+        short topClass = 5;
         for (RaceEntry entry : entries) {
-            BigDecimal horseRating = entry.getHorse() != null
-                    && entry.getHorse().getCurrentScore() != null
-                    ? entry.getHorse().getCurrentScore()
-                    : BigDecimal.ZERO;
-            BigDecimal handicap = DEFAULT_TOP_WEIGHT_KG
-                    .subtract(topRating.subtract(horseRating).multiply(RATING_POINT_TO_KG))
-                    .setScale(1, RoundingMode.HALF_UP)
-                    .max(MIN_HANDICAP_WEIGHT_KG);
+            if (entry.getHorse() == null) continue;
+            BigDecimal score = entry.getHorse().getCurrentScore() != null ? entry.getHorse().getCurrentScore() : BigDecimal.ZERO;
+            if (score.compareTo(topRating) > 0) {
+                topRating = score;
+                topClass = entry.getHorse().getHorseClass() != null ? entry.getHorse().getHorseClass() : 5;
+            }
+        }
+
+        BigDecimal topWeightKg = resolveTopWeight(topClass);
+        BigDecimal minWeightKg = new BigDecimal("51.3");
+        BigDecimal lbToKg = new BigDecimal("0.454");
+
+        for (RaceEntry entry : entries) {
+            if (entry.getHorse() == null) continue;
+            BigDecimal thisRating = entry.getHorse().getCurrentScore() != null ? entry.getHorse().getCurrentScore() : BigDecimal.ZERO;
+            BigDecimal handicap;
+            if (thisRating.compareTo(topRating) >= 0) {
+                short cls = entry.getHorse().getHorseClass() != null ? entry.getHorse().getHorseClass() : 5;
+                handicap = resolveTopWeight(cls);
+            } else {
+                BigDecimal diff = topRating.subtract(thisRating);
+                handicap = topWeightKg.subtract(diff.multiply(lbToKg)).setScale(1, RoundingMode.HALF_UP);
+                handicap = handicap.max(minWeightKg);
+            }
             entry.setHandicapWeight(handicap);
         }
     }
