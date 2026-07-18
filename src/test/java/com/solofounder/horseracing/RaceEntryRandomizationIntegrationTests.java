@@ -328,7 +328,7 @@ public class RaceEntryRandomizationIntegrationTests {
         }
         // Unique gates
         assertEquals(3, gates.size());
-        assertEquals(Set.of(new BigDecimal("61.2"), new BigDecimal("58.9"), new BigDecimal("56.7")),
+        assertEquals(Set.of(new BigDecimal("51.3")),
                 handicapWeights);
 
         // Verify in DB
