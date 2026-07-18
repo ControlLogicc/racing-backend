@@ -18,7 +18,6 @@ public class CreateRaceResultRequest {
     @NotNull(message = "Entry id is required")
     private Long entryId;
 
-    @NotNull(message = "Position is required")
     @Min(value = 1, message = "Position must be at least 1")
     private Short position;
 
