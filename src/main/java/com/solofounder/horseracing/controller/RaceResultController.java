@@ -2,6 +2,7 @@ package com.solofounder.horseracing.controller;
 
 import com.solofounder.horseracing.dto.race.CreateRaceResultRequest;
 import com.solofounder.horseracing.dto.race.RaceResultResponse;
+import com.solofounder.horseracing.dto.jockey.JockeyStatsResponse;
 import com.solofounder.horseracing.service.RaceResultService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,18 @@ public class RaceResultController {
     @PreAuthorize("permitAll()")
     public ResponseEntity<List<RaceResultResponse>> getResultsByHorse(@PathVariable Long horseId) {
         return ResponseEntity.ok(raceResultService.getResultsByHorse(horseId));
+    }
+
+    @GetMapping("/jockey/{jockeyId}")
+    @PreAuthorize("permitAll()")
+    public ResponseEntity<List<RaceResultResponse>> getResultsByJockey(@PathVariable Long jockeyId) {
+        return ResponseEntity.ok(raceResultService.getResultsByJockey(jockeyId));
+    }
+
+    @GetMapping("/jockey/{jockeyId}/stats")
+    @PreAuthorize("permitAll()")
+    public ResponseEntity<JockeyStatsResponse> getJockeyStats(@PathVariable Long jockeyId) {
+        return ResponseEntity.ok(raceResultService.getJockeyStats(jockeyId));
     }
 
     @GetMapping("/{raceId}")

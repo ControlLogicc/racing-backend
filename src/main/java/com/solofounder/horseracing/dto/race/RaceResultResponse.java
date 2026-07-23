@@ -19,6 +19,8 @@ public class RaceResultResponse {
     private Long entryId;
     private Long raceId;
     private String raceName;
+    private LocalDateTime scheduledTime;
+    private String raceStatus;
     private Long horseId;
     private String horseName;
     private Long jockeyId;

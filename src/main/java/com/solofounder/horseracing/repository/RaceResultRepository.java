@@ -37,6 +37,16 @@ public interface RaceResultRepository extends JpaRepository<RaceResult, Long> {
            "ORDER BY race.scheduledTime DESC, r.createdAt DESC")
     List<RaceResult> findByHorseIdWithDetails(@Param("horseId") Long horseId);
 
+    @Query("SELECT r FROM RaceResult r " +
+           "JOIN FETCH r.entry e " +
+           "JOIN FETCH r.race race " +
+           "JOIN FETCH e.horse " +
+           "JOIN FETCH e.jockey j " +
+           "JOIN FETCH j.user " +
+           "WHERE j.jockeyId = :jockeyId " +
+           "ORDER BY race.scheduledTime DESC, r.createdAt DESC")
+    List<RaceResult> findByJockeyIdWithDetails(@Param("jockeyId") Long jockeyId);
+
     List<RaceResult> findByEntryHorseHorseIdAndRaceStatusAndResultStatusIn(
             Long horseId, RaceStatus raceStatus, List<RaceResultStatus> resultStatuses);
 

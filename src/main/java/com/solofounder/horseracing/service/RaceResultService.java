@@ -3,6 +3,7 @@ package com.solofounder.horseracing.service;
 import com.solofounder.horseracing.dto.race.CreateRaceResultRequest;
 import com.solofounder.horseracing.dto.race.CreateRaceResultsRequest;
 import com.solofounder.horseracing.dto.race.RaceResultResponse;
+import com.solofounder.horseracing.dto.jockey.JockeyStatsResponse;
 import com.solofounder.horseracing.model.Horse;
 import com.solofounder.horseracing.model.Jockey;
 import com.solofounder.horseracing.model.Race;
@@ -15,6 +16,7 @@ import com.solofounder.horseracing.model.enums.RaceResultStatus;
 import com.solofounder.horseracing.model.enums.RaceStatus;
 import com.solofounder.horseracing.model.enums.Role;
 import com.solofounder.horseracing.repository.HorseRepository;
+import com.solofounder.horseracing.repository.JockeyRepository;
 import com.solofounder.horseracing.repository.PrizeStructureRepository;
 import com.solofounder.horseracing.repository.RaceEntryRepository;
 import com.solofounder.horseracing.repository.RaceRepository;
@@ -31,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -55,6 +58,7 @@ public class RaceResultService {
     private final RaceEntryRepository raceEntryRepository;
     private final RaceRepository raceRepository;
     private final HorseRepository horseRepository;
+    private final JockeyRepository jockeyRepository;
     private final HorseService horseService;
     private final StaffRepository staffRepository;
     private final RefereeRepository refereeRepository;
@@ -194,6 +198,64 @@ public class RaceResultService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<RaceResultResponse> getResultsByJockey(Long jockeyId) {
+        if (!jockeyRepository.existsById(jockeyId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey not found");
+        }
+        return raceResultRepository.findByJockeyIdWithDetails(jockeyId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public JockeyStatsResponse getJockeyStats(Long jockeyId) {
+        Jockey jockey = jockeyRepository.findById(jockeyId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jockey not found"));
+        List<RaceResult> results = raceResultRepository.findByJockeyIdWithDetails(jockeyId);
+
+        long totalRaces = results.size();
+        long totalWins = results.stream()
+                .filter(this::isPrizeEligibleResult)
+                .filter(result -> result.getPosition() != null && result.getPosition() == 1)
+                .count();
+        long top3Finishes = results.stream()
+                .filter(this::isPrizeEligibleResult)
+                .filter(result -> result.getPosition() != null && result.getPosition() <= 3)
+                .count();
+        long disqualifiedCount = results.stream()
+                .filter(result -> result.getResultStatus() == RaceResultStatus.DISQUALIFIED)
+                .count();
+        BigDecimal totalPrizeAmount = results.stream()
+                .map(RaceResult::getPrizeAmount)
+                .map(this::nullToZero)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalScoreAwarded = results.stream()
+                .map(RaceResult::getScoreAwarded)
+                .map(this::nullToZero)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal averagePosition = averagePosition(results);
+        BigDecimal winRate = totalRaces == 0
+                ? BigDecimal.ZERO
+                : BigDecimal.valueOf(totalWins)
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(BigDecimal.valueOf(totalRaces), 2, RoundingMode.HALF_UP);
+
+        User jockeyUser = jockey.getUser();
+        return JockeyStatsResponse.builder()
+                .jockeyId(jockey.getJockeyId())
+                .jockeyName(jockeyUser != null ? jockeyUser.getFullName() : null)
+                .totalRaces(totalRaces)
+                .totalWins(totalWins)
+                .top3Finishes(top3Finishes)
+                .disqualifiedCount(disqualifiedCount)
+                .totalPrizeAmount(totalPrizeAmount)
+                .totalScoreAwarded(totalScoreAwarded)
+                .averagePosition(averagePosition)
+                .winRate(winRate)
+                .build();
+    }
+
     private void requireRecorderRole(User user) {
         if (user.getRole() != Role.ADMIN && user.getRole() != Role.STAFF && user.getRole() != Role.REFEREE) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
@@ -289,6 +351,25 @@ public class RaceResultService {
 
     private boolean isRankableResult(RaceResult result) {
         return result.getFinishTime() != null && isRankableStatus(result.getResultStatus());
+    }
+
+    private boolean isPrizeEligibleResult(RaceResult result) {
+        return result.getResultStatus() != RaceResultStatus.DISQUALIFIED;
+    }
+
+    private BigDecimal averagePosition(List<RaceResult> results) {
+        List<Short> positions = results.stream()
+                .filter(this::isPrizeEligibleResult)
+                .map(RaceResult::getPosition)
+                .filter(position -> position != null && position > 0)
+                .toList();
+        if (positions.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal total = positions.stream()
+                .map(BigDecimal::valueOf)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return total.divide(BigDecimal.valueOf(positions.size()), 2, RoundingMode.HALF_UP);
     }
 
     private short nextTemporaryPosition(Long raceId) {
@@ -394,6 +475,8 @@ public class RaceResultService {
                 .entryId(entry != null ? entry.getEntryId() : null)
                 .raceId(race != null ? race.getRaceId() : null)
                 .raceName(race != null ? race.getRaceName() : null)
+                .scheduledTime(race != null ? race.getScheduledTime() : null)
+                .raceStatus(race != null && race.getStatus() != null ? race.getStatus().name() : null)
                 .horseId(horse != null ? horse.getHorseId() : null)
                 .horseName(horse != null ? horse.getHorseName() : null)
                 .jockeyId(jockey != null ? jockey.getJockeyId() : null)
